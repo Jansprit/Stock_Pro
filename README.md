@@ -1,8 +1,8 @@
 # AI Stock Research Dashboard
 
-> 智慧化股票研究分析平台 — 輸入股票代碼或公司名稱，整合 **多源股票資料（Yahoo Finance / Finnhub / Alpha Vantage / Twelve Data）聰明路由** 與 **Claude AI 中轉站** 分析，產出結構完整的股票研究報告。
+> 智慧化股票研究分析平台 — 輸入股票代碼或公司名稱，整合 **多源股票資料（Yahoo Finance / Finnhub / Alpha Vantage / Twelve Data / TWSE 公開端點）聰明路由** 與 **AI 中轉站** 分析，產出結構完整的股票研究報告。
 
-![Tech Stack](https://img.shields.io/badge/Next.js-14-black) ![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue) ![Tailwind](https://img.shields.io/badge/Tailwind-3-38bdf8) ![Recharts](https://img.shields.io/badge/Recharts-2-ff7300) ![Sources](https://img.shields.io/badge/Data-4--source%20routing-22c55e)
+![Tech Stack](https://img.shields.io/badge/Next.js-14-black) ![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue) ![Tailwind](https://img.shields.io/badge/Tailwind-3-38bdf8) ![Recharts](https://img.shields.io/badge/Recharts-2-ff7300) ![Sources](https://img.shields.io/badge/Data-5--source%20routing-22c55e) ![License](https://img.shields.io/badge/License-MIT-yellow) ![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF)
 
 ## ✨ 功能特色
 
@@ -27,19 +27,20 @@
 | 框架 | Next.js 14 (App Router) + TypeScript |
 | 樣式 | Tailwind CSS 3 |
 | 圖表 | Recharts |
-| 股票資料 | **多源聰明路由**（Yahoo v8/chart + Finnhub + Alpha Vantage + Twelve Data） |
+| 股票資料 | **多源聰明路由**（Yahoo v8/chart + Finnhub + Alpha Vantage + Twelve Data + TWSE/TPEx 公開端點） |
 | AI | 自訂中轉站 `OpenAI 相容 /chat/completions`（模型 `MiniMax-M2.7`） |
 | Icons | lucide-react |
 | 日期 | date-fns |
 
 ## 🧭 資料源聰明路由（Multi-source Smart Routing）
 
-為什麼不只用一家 API？Yahoo Finance 走非官方爬蟲，2026-07-04 實測本機 IP 觸發 429 全端點失效；其他三家各有免費額度上限（Alpha Vantage 25 次/天、Twelve Data 800 credits/天、Finnhub 60 次/分鐘）。因此本專案採用**依用途分流 + 多源備援 + 本地快取**：
+為什麼不只用一家 API？Yahoo Finance 走非官方爬蟲，2026-07-04 實測本機 IP 觸發 429 全端點失效；其他各家各有免費額度上限（Alpha Vantage 25 次/天、Twelve Data 800 credits/天、Finnhub 60 次/分鐘）。台股方面則優先走 TWSE / TPEx 公開端點，無需 API key 且無明確 rate limit。本專案採用**依用途分流 + 多源備援 + 本地快取**：
 
 | 用途 | 主源 | 備援 1 | 備援 2 | 終端 fallback |
 |------|------|--------|--------|--------------|
-| 即時報價 + K 線 | Yahoo v8/chart | Finnhub | Twelve Data | mock seed |
-| 估值 / 基本面 | Alpha Vantage OVERVIEW | Finnhub profile + metric | — | mock seed |
+| 即時報價 + K 線（美股/全球） | Yahoo v8/chart | Finnhub | Twelve Data | mock seed |
+| 即時報價 + K 線（台股 `*.TW` / `*.TWO`） | TWSE MIS + STOCK_DAY / TPEx | Yahoo v8/chart | Twelve Data | mock seed |
+| 估值 / 基本面（美股） | Alpha Vantage OVERVIEW | Finnhub profile + metric | — | mock seed |
 | 詳細財報（三表） | Alpha Vantage | — | — | 空陣列 |
 | 公司新聞 | Finnhub | — | — | 空陣列 |
 | 股票搜尋 | Finnhub | Twelve Data | mock seed | — |
@@ -149,6 +150,7 @@ stock-pro/
 │   │   ├── finnhub.ts         # Finnhub（報價/profile/metric/search/news）
 │   │   ├── alpha-vantage.ts   # Alpha Vantage（含 13s 節流）
 │   │   ├── twelve-data.ts     # Twelve Data（台股 symbol 自動加 .TW）
+│   │   ├── twse.ts            # TWSE / TPEx 公開端點（台股原生，無需 key）
 │   │   └── mock.ts            # 本地種子（台股 + 美股 + ETF）
 │   ├── yahoo.ts        # 向後相容 re-export（從 sources/ 統一出口）
 │   ├── claude.ts       # OpenAI 相容中轉站呼叫 + JSON 容錯解析
@@ -179,13 +181,14 @@ stock-pro/
 ## ⚠️ 重要限制
 
 ### 資料源
+- **TWSE / TPEx 公開端點**（台股原生權威）：即時報價（5 秒延遲）、月歷史 K 線、本益比/殖利率等估值欄位；無需 API key，無明確 rate limit，建議節流 5 秒 3 req
 - **Yahoo Finance**：非官方端點，依賴 IP 寬頻；高頻併發或區網 NAT 共享可能觸發 429（已內建備援）
 - **Alpha Vantage**：免費版 25 次/天嚴格上限，已內建 13 秒節流與軟錯誤偵測
 - **Finnhub**：免費 60 次/分鐘，適合美股即時監控；台股 profile 需付費（已用 mock seed 補）
 - **Twelve Data**：以 credits 計，免費 800/天；台股 symbol 自動加 `.TW`
 - **所有資料源皆內建快取**，避免重複打 API
 
-### Claude / 中轉站 AI
+### Claude / AI 中轉站
 - 需中轉站 API key（`AI_RELAY_API_KEY`）
 - 預設模型 `MiniMax-M2.7`，透過 OpenAI 相容 `/chat/completions` 介面呼叫
 - 可在 `.env.local` 改 `AI_RELAY_BASE_URL` 或 `AI_RELAY_MODEL` 切換端點與模型
@@ -209,7 +212,7 @@ stock-pro/
 
 ## 📜 License
 
-MIT
+MIT — 詳見 [LICENSE](./LICENSE)
 
 ---
 

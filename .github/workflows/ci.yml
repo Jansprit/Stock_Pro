@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build (Next.js)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check & build
+        # Next.js build 會順帶跑 TypeScript 型別檢查（tsconfig.json: strict）
+        run: npm run build
+        env:
+          # CI 不打真實 API，提供 placeholder 讓 build 不因缺少環境變數而失敗
+          AI_RELAY_BASE_URL: https://your-ai-relay.example.com
+          AI_RELAY_MODEL: MiniMax-M2.7
+          AI_RELAY_API_KEY: ci-placeholder-key
+
+      - name: Upload build artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: .next-build
+          path: .next
+          retention-days: 7
+          if-no-files-found: ignore
