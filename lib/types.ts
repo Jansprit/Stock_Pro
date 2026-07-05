@@ -46,6 +46,26 @@ export interface StockOverview {
   founded?: string;
   headquarters?: string;
   ceo?: string;
+
+  // ========== 估值 / 分析師共識（公允價值面板用）==========
+  /** 分析師目標均價（Yahoo v10 quoteSummary / Finnhub） */
+  analystTargetMean?: number;
+  /** 分析師目標最高價 */
+  analystTargetHigh?: number;
+  /** 分析師目標最低價 */
+  analystTargetLow?: number;
+  /** 提供目標價的分析師人數 */
+  analystCount?: number;
+  /** 評級共識（buy / hold / sell） */
+  analystRating?: 'strongBuy' | 'buy' | 'hold' | 'sell' | 'strongSell';
+  /** 目標價資料來源 */
+  priceTargetSource?: 'yahoo-v10' | 'finnhub' | 'mock';
+  /** 量化公允價值（5 模型加權平均，本機算） */
+  fairValue?: number;
+  /** 現價相對於分析師目標的溢/折價 %（正值 = 溢價，負值 = 折價） */
+  premiumToAnalystTarget?: number;
+  /** 現價相對於量化公允價值的溢/折價 % */
+  premiumToFairValue?: number;
 }
 
 // ========== 歷史股價 ==========
@@ -118,6 +138,8 @@ export interface Competitor {
   netMargin?: number;
   eps?: number;
   pe?: number;
+  ps?: number;
+  evEbitda?: number;
   roe?: number;
   dividendYield?: number;
   growthRate?: number;

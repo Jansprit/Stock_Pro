@@ -29,6 +29,12 @@ import * as alphaVantage from './alpha-vantage';
 import * as twelveData from './twelve-data';
 import * as twse from './twse';
 import * as mock from './mock';
+import * as yahooQs from './yahoo-quote-summary';
+import * as secEdgar from './sec-edgar';
+import * as secCik from './sec-cik';
+import * as fred from './fred';
+import * as mopsXbrl from './mops-xbrl';
+import { runValuation } from '../valuation';
 
 // ========== 退避重試工具 ==========
 
@@ -377,7 +383,24 @@ export async function getStockOverview(symbol: string): Promise<StockOverview> {
     // Step 2: 估值 / 基本面（用實際成功的 symbol 去查）
     const valuation = await fetchValuationAndProfile(usedSymbol);
 
-    // Step 3: 合併，quoteMeta 為基礎，valuation 補缺
+    // Step 2.5: 分析師目標價 + SEC EDGAR（美股）/ MOPS XBRL（台股）精確財報
+    const usedIsTaiwan = usedSymbol.endsWith('.TW') || usedSymbol.endsWith('.TWO');
+    const [analystData, secData] = await Promise.all([
+      fetchAnalystTargets(usedSymbol),
+      usedIsTaiwan ? Promise.resolve(null) : fetchSecDataForUs(usedSymbol),
+    ]);
+
+    // Step 2.6: 台股個股抓 MOPS XBRL 精確財報（ETF 自動跳過）
+    let mopsData: mopsXbrl.MopsFundamentals | null = null;
+    if (usedIsTaiwan) {
+      mopsData = await fetchMopsDataForTw(usedSymbol);
+    }
+
+    // Step 3: 跑 5 模型估值（需要 EPS / FCF / 同業 PE 等資料，部分從 valuation 取）
+    const rf = await fred.fetchRiskFreeRate();
+    const fairValueResult = runFairValueComputation(merged_shell(quoteMeta, valuation), secData, rf, mopsData, usedSymbol);
+
+    // Step 4: 合併，quoteMeta 為基礎，valuation 補缺
     const merged: StockOverview = {
       // 基礎欄位（從 quoteMeta）
       symbol: quoteMeta.symbol ?? usedSymbol,
@@ -411,10 +434,32 @@ export async function getStockOverview(symbol: string): Promise<StockOverview> {
       founded: valuation.founded ?? quoteMeta.founded ?? '',
       headquarters: valuation.headquarters ?? quoteMeta.headquarters ?? '',
       ceo: valuation.ceo ?? quoteMeta.ceo ?? '',
+      // 分析師目標價（從 Yahoo v10 quoteSummary）
+      analystTargetMean: analystData?.targetMeanPrice,
+      analystTargetHigh: analystData?.targetHighPrice,
+      analystTargetLow: analystData?.targetLowPrice,
+      analystCount: analystData?.numberOfAnalystOpinions,
+      analystRating: analystData?.recommendationKey,
+      priceTargetSource: analystData?.targetMeanPrice ? 'yahoo-v10' : undefined,
+      // 量化公允價值（5 模型加權）
+      fairValue: fairValueResult.fairValue,
+      premiumToFairValue: premium(fairValueResult.fairValue, merged_shell(quoteMeta, valuation).price),
+      premiumToAnalystTarget: premium(analystData?.targetMeanPrice, merged_shell(quoteMeta, valuation).price),
     };
 
     return merged;
   });
+}
+
+/** 計算溢/折價 %（正值 = 溢價，負值 = 折價） */
+function premium(reference: number | undefined, price: number | undefined): number | undefined {
+  if (reference === undefined || price === undefined || reference <= 0) return undefined;
+  return ((price - reference) / reference) * 100;
+}
+
+/** 暫存 quoteMeta + valuation 給其他 helper 用（避免重複欄位列舉） */
+function merged_shell(q: Partial<StockOverview>, v: Partial<StockOverview>): Partial<StockOverview> {
+  return { ...q, ...v };
 }
 
 // ========== 4. 歷史 K 線 ==========
@@ -703,4 +748,107 @@ export async function getCompetitorMetrics(symbols: string[]): Promise<Map<strin
     }),
   );
   return result;
+}
+
+// ========== 8. 分析師目標價 + SEC EDGAR 精確財報 ==========
+
+/** 抓 Yahoo v10 quoteSummary 的分析師目標價與評級 */
+async function fetchAnalystTargets(symbol: string): Promise<yahooQs.YahooQuoteSummary | null> {
+  try {
+    return await withRetry('yahoo-quote-summary', () => yahooQs.fetchAnalystTargets(symbol));
+  } catch {
+    return null;
+  }
+}
+
+/** 抓美股的 SEC EDGAR 精確財報（限美股，台股走 mock fallback） */
+async function fetchSecDataForUs(symbol: string): Promise<secEdgar.SecFundamentals | null> {
+  try {
+    const cik = await secCik.lookupCikByTicker(symbol);
+    if (!cik) return null;
+    return await secEdgar.fetchSecFundamentals(cik);
+  } catch {
+    return null;
+  }
+}
+
+/** 抓台股的 MOPS XBRL 精確財報（限個股，ETF 自動跳過） */
+async function fetchMopsDataForTw(symbol: string): Promise<mopsXbrl.MopsFundamentals | null> {
+  try {
+    const rawSymbol = symbol.replace(/\.(TW|TWO)$/i, '');
+    return await mopsXbrl.fetchMopsFundamentals(rawSymbol);
+  } catch {
+    return null;
+  }
+}
+
+/** 整合 5 個估值模型，產出 ValuationResult */
+function runFairValueComputation(
+  shell: Partial<StockOverview>,
+  sec: secEdgar.SecFundamentals | null,
+  riskFreeRate: number,
+  mops: mopsXbrl.MopsFundamentals | null = null,
+  usedSymbol: string = '',
+) {
+  // 同業中位數：從 competitors.ts 拿（用 lazy require 避免循環）
+  let sectorPeMedian: number | undefined;
+  let sectorPsMedian: number | undefined;
+  let sectorEvEbitdaMedian: number | undefined;
+  try {
+    const { getCompetitorsForSymbol, getSectorValuationMedian } = require('../competitors') as typeof import('../competitors');
+    const symbol = shell.symbol ?? '';
+    const peers = getCompetitorsForSymbol(symbol);
+    if (peers.length > 0) {
+      const median = getSectorValuationMedian(symbol, peers);
+      sectorPeMedian = median.pe;
+      sectorPsMedian = median.ps;
+      sectorEvEbitdaMedian = median.evEbitda;
+    }
+  } catch {
+    // competitors 拿不到就算了
+  }
+
+  // DPS / EBITDA / debt / cash / shares：優先 SEC（美股）或 MOPS（台股個股），其次從 shell 推估
+  // MOPS 單季資料需年化（×4）才能與 PE/倍數法相容；累計（Q4）直接用
+  const annualize = mops && mops.isAnnual === false ? 4 : 1;
+  const eps = mops?.eps !== undefined ? mops.eps * annualize : (shell.eps ?? 0);
+  const fcf = mops?.freeCashFlow !== undefined ? mops.freeCashFlow * annualize : undefined;
+  const dps = mops?.netIncome && mops?.sharesOutstanding && mops?.eps
+    ? ((mops.netIncome / mops.sharesOutstanding) * annualize * 0.6) // 預估 payout ~60%（MOPS XBRL 沒直接 DPS 欄位）
+    : sec?.dps ?? (shell.dividendYield && shell.price ? (shell.dividendYield / 100) * shell.price : undefined);
+  const payoutRatio = mops?.netIncome && mops.eps && mops.eps > 0 && mops.sharesOutstanding
+    ? 0.6
+    : (sec?.dps && eps > 0 ? sec.dps / eps : undefined);
+  const ebitda = mops?.ebitda !== undefined ? mops.ebitda * annualize : sec?.ebitda;
+  const totalDebt = mops?.totalDebt ?? sec?.totalLiabilities;
+  const cash = mops?.cash ?? sec?.cashAndEquivalents;
+  const sharesOutstanding = mops?.sharesOutstanding ?? sec?.sharesOutstanding
+    ?? (shell.marketCap && shell.price ? shell.marketCap / shell.price : undefined);
+  const roe = mops?.roe;
+
+  // FCF 與 FCF CAGR：先 mock fallback（之後可從 financials route 傳入）
+  // 為避免引入太多耦合，這裡若 shell 沒 fcf 資料就不跑 DCF（在 runValuation 內 skip）
+  // SPS（P/S 模型用）目前沒合適的 per-share revenue 來源，之後從 financials 注入
+  const sps: number | undefined = undefined;
+
+  return runValuation({
+    symbol: shell.symbol ?? '',
+    currency: shell.currency ?? 'USD',
+    price: shell.price ?? 0,
+    eps,
+    beta: shell.beta,
+    roe,
+    payoutRatio,
+    sectorPeMedian,
+    sectorPsMedian,
+    sectorEvEbitdaMedian,
+    sps,
+    dps,
+    ebitda,
+    totalDebt,
+    cash,
+    sharesOutstanding,
+    fcf,
+    riskFreeRate,
+  });
 }

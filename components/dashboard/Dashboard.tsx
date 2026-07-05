@@ -10,6 +10,7 @@ import { NewsList } from './NewsList';
 import { CompetitorTable } from './CompetitorTable';
 import { AIAnalysisPanel } from './AIAnalysisPanel';
 import { ResearchReport } from './ResearchReport';
+import { ValuationPanel } from './ValuationPanel';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { Card } from '@/components/ui/Card';
 import { Tag } from '@/components/ui/Tag';
@@ -47,6 +48,9 @@ export function Dashboard({ data, aiError, onRefresh }: DashboardProps) {
 
       {/* 總覽卡片 */}
       <StockOverviewCard overview={overview} />
+
+      {/* 估值分析（公允價值 + 分析師目標） */}
+      <ValuationPanel overview={overview} />
 
       {/* 股價走勢 */}
       <PriceChart symbol={overview.symbol} overview={overview} initialData={chart} initialRange="1Y" />

@@ -26,6 +26,8 @@ const MOCK_SEED: Record<string, Partial<StockOverview>> = {
   LLY: { name: 'Eli Lilly and Company', sector: 'Healthcare', industry: 'Pharmaceutical' },
 
   // === 台股（Finnhub 對台股 profile 不付費，這裡補公司基本資料） ===
+  // 注意：beta 是估值模型（WACC = rf + β × ERP）的必要輸入。
+  // 這裡手填合理預設值，使用者可在 .env.local 透過 SEC/Finnhub 覆蓋。
   '2330.TW': {
     name: '台積電',
     sector: 'Technology',
@@ -36,6 +38,7 @@ const MOCK_SEED: Record<string, Partial<StockOverview>> = {
     website: 'https://www.tsmc.com',
     headquarters: '新竹科學園區，台灣',
     founded: '1987',
+    beta: 1.10, // 半導體龍頭，略大於大盤
   },
   '2454.TW': {
     name: '聯發科',
@@ -46,6 +49,7 @@ const MOCK_SEED: Record<string, Partial<StockOverview>> = {
     website: 'https://www.mediatek.com',
     headquarters: '新竹科學園區，台灣',
     founded: '1997',
+    beta: 1.25, // IC 設計，波動較大
   },
   '2308.TW': {
     name: '台達電',
@@ -56,6 +60,7 @@ const MOCK_SEED: Record<string, Partial<StockOverview>> = {
     website: 'https://www.deltaww.com',
     headquarters: '桃園市，台灣',
     founded: '1971',
+    beta: 1.05, // 電源/工業，穩定
   },
   '2317.TW': {
     name: '鴻海',
@@ -66,6 +71,7 @@ const MOCK_SEED: Record<string, Partial<StockOverview>> = {
     website: 'https://www.honhai.com',
     headquarters: '新北市，台灣',
     founded: '1974',
+    beta: 0.95, // 代工毛利穩定
   },
   '2603.TW': {
     name: '長榮海運',
@@ -76,6 +82,73 @@ const MOCK_SEED: Record<string, Partial<StockOverview>> = {
     website: 'https://www.evergreen-marine.com',
     headquarters: '台北市，台灣',
     founded: '1968',
+    beta: 1.35, // 航運景氣循環
+  },
+  '2303.TW': {
+    name: '聯電',
+    sector: 'Technology',
+    industry: 'Semiconductors',
+    country: 'TW',
+    description: '聯華電子股份有限公司為全球前十大晶圓代工廠，聚焦成熟製程，服務車用、物聯網等應用。',
+    website: 'https://www.umc.com',
+    headquarters: '新竹科學園區，台灣',
+    founded: '1980',
+    beta: 1.30, // 晶圓代工
+  },
+  '2382.TW': {
+    name: '廣達',
+    sector: 'Technology',
+    industry: 'Computer Hardware',
+    country: 'TW',
+    description: '廣達電腦股份有限公司是全球最大的筆記型電腦與伺服器代工廠，近年 AI 伺服器業務高速成長。',
+    website: 'https://www.quantatw.com',
+    headquarters: '桃園市，台灣',
+    founded: '1988',
+    beta: 1.15, // AI 伺服器題材，波動中高
+  },
+  '2881.TW': {
+    name: '富邦金',
+    sector: 'Financial Services',
+    industry: 'Banks',
+    country: 'TW',
+    description: '富邦金融控股股份有限公司是台灣第二大金控，旗下擁有富邦人壽、富邦銀行、富邦證券等子公司。',
+    website: 'https://www.fubon.com',
+    headquarters: '台北市，台灣',
+    founded: '2001',
+    beta: 0.85, // 金融穩定
+  },
+  '2882.TW': {
+    name: '國泰金',
+    sector: 'Financial Services',
+    industry: 'Insurance',
+    country: 'TW',
+    description: '國泰金融控股股份有限公司是台灣資產規模最大的金控公司，旗下國泰人壽為台灣壽險龍頭。',
+    website: 'https://www.cathayholdings.com.tw',
+    headquarters: '台北市，台灣',
+    founded: '2001',
+    beta: 0.90,
+  },
+  '2884.TW': {
+    name: '玉山金',
+    sector: 'Financial Services',
+    industry: 'Banks',
+    country: 'TW',
+    description: '玉山金融控股股份有限公司以玉山商業銀行為主體，是台灣消金品牌力最強的銀行之一。',
+    website: 'https://www.esunbank.com.tw',
+    headquarters: '台北市，台灣',
+    founded: '2002',
+    beta: 0.80,
+  },
+  '6488.TWO': {
+    name: '環球晶',
+    sector: 'Technology',
+    industry: 'Semiconductors',
+    country: 'TW',
+    description: '環球晶圓股份有限公司為全球第三大半導體矽晶圓製造商，產品涵蓋 3 吋至 12 吋矽晶圓。',
+    website: 'https://www.sas-globalwafers.com',
+    headquarters: '新竹科學園區，台灣',
+    founded: '2011',
+    beta: 1.40, // 矽晶圓景氣循環
   },
 
   // === 台股 ETF（顯示用 sector/industry）===
@@ -127,16 +200,6 @@ const MOCK_SEED: Record<string, Partial<StockOverview>> = {
     headquarters: '台北市，台灣',
     founded: '1946',
   },
-  '2303.TW': {
-    name: '聯電',
-    sector: 'Technology',
-    industry: 'Semiconductors',
-    country: 'TW',
-    description: '聯華電子股份有限公司為全球前十大晶圓代工廠，聚焦成熟製程，服務車用、物聯網等應用。',
-    website: 'https://www.umc.com',
-    headquarters: '新竹科學園區，台灣',
-    founded: '1980',
-  },
   '2609.TW': {
     name: '陽明海運',
     sector: 'Industrials',
@@ -147,46 +210,6 @@ const MOCK_SEED: Record<string, Partial<StockOverview>> = {
     headquarters: '台北市，台灣',
     founded: '1972',
   },
-  '2881.TW': {
-    name: '富邦金',
-    sector: 'Financial Services',
-    industry: 'Banks',
-    country: 'TW',
-    description: '富邦金融控股股份有限公司是台灣第二大金控，旗下擁有富邦人壽、富邦銀行、富邦證券等子公司。',
-    website: 'https://www.fubon.com',
-    headquarters: '台北市，台灣',
-    founded: '2001',
-  },
-  '2882.TW': {
-    name: '國泰金',
-    sector: 'Financial Services',
-    industry: 'Insurance',
-    country: 'TW',
-    description: '國泰金融控股股份有限公司是台灣資產規模最大的金控公司，旗下國泰人壽為台灣壽險龍頭。',
-    website: 'https://www.cathayholdings.com.tw',
-    headquarters: '台北市，台灣',
-    founded: '2001',
-  },
-  '2884.TW': {
-    name: '玉山金',
-    sector: 'Financial Services',
-    industry: 'Banks',
-    country: 'TW',
-    description: '玉山金融控股股份有限公司以玉山商業銀行為主體，是台灣消金品牌力最強的銀行之一。',
-    website: 'https://www.esunbank.com.tw',
-    headquarters: '台北市，台灣',
-    founded: '2002',
-  },
-  '2382.TW': {
-    name: '廣達',
-    sector: 'Technology',
-    industry: 'Computer Hardware',
-    country: 'TW',
-    description: '廣達電腦股份有限公司是全球最大的筆記型電腦與伺服器代工廠，近年 AI 伺服器業務高速成長。',
-    website: 'https://www.quantatw.com',
-    headquarters: '桃園市，台灣',
-    founded: '1988',
-  },
   '6669.TW': {
     name: '緯穎',
     sector: 'Technology',
@@ -196,16 +219,7 @@ const MOCK_SEED: Record<string, Partial<StockOverview>> = {
     website: 'https://www.wiwynn.com',
     headquarters: '新北市，台灣',
     founded: '2012',
-  },
-  '6488.TWO': {
-    name: '環球晶',
-    sector: 'Technology',
-    industry: 'Semiconductors',
-    country: 'TW',
-    description: '環球晶圓股份有限公司為全球第三大半導體矽晶圓製造商，產品涵蓋 3 吋至 12 吋矽晶圓。',
-    website: 'https://www.sas-globalwafers.com',
-    headquarters: '新竹科學園區，台灣',
-    founded: '2011',
+    beta: 1.20, // AI 伺服器題材
   },
 
   // === 主動型 ETF（00400A~00499A 系列是台灣近期推出之主動型 ETF）===
