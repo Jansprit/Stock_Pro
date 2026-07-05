@@ -19,6 +19,7 @@
  */
 
 import { cached } from '../cache';
+import type { FinancialYear } from '../types';
 
 const URL = 'https://mopsov.twse.com.tw/server-java/t164sb01';
 const UA =
@@ -177,37 +178,20 @@ interface XbrlValue {
  */
 function extractXbrlValues(html: string): Map<string, XbrlValue[]> {
   const out = new Map<string, XbrlValue[]>();
-  // 兩種寫法：ix:nonFraction 與直接 tag
-  const patterns = [
-    /<ix:nonFraction[^>]*name="ifrs-full:([A-Za-z]+)"[^>]*contextRef="([^"]+)"[^>]*scale="(-?\d+)"[^>]*>([\d,.\-]+)<\/ix:nonFraction>/g,
-    /<ix:nonFraction[^>]*name="ifrs-full:([A-Za-z]+)"[^>]*contextRef="([^"]+)"[^>]*>([\d,.\-]+)<\/ix:nonFraction>/g,
-    /<ifrs-full:([A-Za-z]+)[^>]*contextRef="([^"]+)"[^>]*>([\d,.\-]+)<\/ifrs-full:[A-Za-z]+>/g,
-  ];
+  // 屬性順序：name → contextRef → (format) → scale → decimals → (unitRef)
+  // 注意：scale 是必要屬性（MOPS XBRL 都會帶）；直接列舉而不依賴 [^>]*? lazy match
+  const pattern = /<ix:nonFraction[^>]*?name="ifrs-full:([A-Za-z]+)"[^>]*?contextRef="([^"]+)"[^>]*?scale="(-?\d+)"[^>]*?>([\d,.\-]+)<\/ix:nonFraction>/g;
 
-  for (const re of patterns) {
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(html)) !== null) {
-      const tag = `ifrs-full:${m[1]}`;
-      let context: string;
-      let scaleRaw: string;
-      let raw: string;
-      let scale = 0;
-      if (m.length === 5) {
-        context = m[2];
-        scaleRaw = m[3];
-        raw = m[4];
-        scale = parseInt(scaleRaw, 10);
-      } else if (m.length === 4) {
-        context = m[2];
-        scaleRaw = '0';
-        raw = m[3];
-      } else {
-        continue;
-      }
-      const val: XbrlValue = { context, scale: isFinite(scale) ? scale : 0, decimals: 0, raw, scaleRaw };
-      if (!out.has(tag)) out.set(tag, []);
-      out.get(tag)!.push(val);
-    }
+  let m: RegExpExecArray | null;
+  while ((m = pattern.exec(html)) !== null) {
+    const tag = `ifrs-full:${m[1]}`;
+    const context = m[2];
+    const scaleRaw = m[3];
+    const raw = m[4];
+    const scale = parseInt(scaleRaw, 10);
+    const val: XbrlValue = { context, scale: isFinite(scale) ? scale : 0, decimals: 0, raw, scaleRaw };
+    if (!out.has(tag)) out.set(tag, []);
+    out.get(tag)!.push(val);
   }
   return out;
 }
@@ -337,6 +321,75 @@ function parseMopsXbrl(html: string, rawSymbol: string, period: string, season: 
     sharesOutstanding,
     roe,
   };
+}
+
+/**
+ * 抓取近 N 年年度累計財報（SSEASON=4）以組出 trend chart
+ *
+ * 從當年往前抓直到拿到 N 個年度，或超過最早可查年度（通常 2018）就停。
+ *
+ * @param rawSymbol 純數字代號，如 '2330'
+ * @param years 欲抓取的年度數（預設 5）
+ */
+export async function fetchMopsMultiYearFinancials(
+  rawSymbol: string,
+  years = 5,
+): Promise<MopsFundamentals[]> {
+  const results: MopsFundamentals[] = [];
+  const now = new Date();
+  const curYear = now.getFullYear();
+  // Q4 通常隔年 3 月底後才公告，因此今年 Q4 可能尚未出
+  // 策略：若今年 Q4 還沒公告，從去年 Q4 開始往回抓
+  const monthNow = now.getMonth() + 1;
+  const thisYearQ4Available = monthNow >= 4;
+  const startYear = thisYearQ4Available ? curYear : curYear - 1;
+
+  for (let y = startYear; y >= startYear - 10 && results.length < years; y--) {
+    const result = await fetchMopsFundamentals(rawSymbol, y, 4);
+    if (result) results.push(result);
+  }
+  return results;
+}
+
+/**
+ * 把 MopsFundamentals 陣列轉成 FinancialYear[]，給前端圖表用
+ */
+export function mopsToFinancialYears(data: MopsFundamentals[]): FinancialYear[] {
+  return data
+    .filter((d) => d.revenue !== undefined || d.netIncome !== undefined || d.eps !== undefined)
+    .map((d) => {
+      const revenue = d.revenue ?? 0;
+      const grossProfit = d.revenue ? d.revenue * 0.4 : 0; // MOPS 沒直接毛利，用 40% 推估（會在面板標示）
+      const operatingIncome = d.operatingIncome ?? 0;
+      const netIncome = d.netIncome ?? 0;
+      const eps = d.eps ?? 0;
+      const totalAssets = d.totalAssets ?? 0;
+      const totalLiabilities = d.totalLiabilities ?? 0;
+      const totalEquity = d.equity ?? 0;
+      const operatingCashFlow = d.cfo ?? 0;
+      const capex = d.capex ?? 0;
+      const freeCashFlow = d.freeCashFlow ?? 0;
+
+      return {
+        year: Number(d.period.slice(0, 4)),
+        revenue,
+        grossProfit,
+        operatingIncome,
+        netIncome,
+        eps,
+        totalAssets,
+        totalLiabilities,
+        totalEquity,
+        operatingCashFlow,
+        freeCashFlow,
+        grossMargin: revenue > 0 ? (grossProfit / revenue) * 100 : 0,
+        operatingMargin: revenue > 0 ? (operatingIncome / revenue) * 100 : 0,
+        netMargin: revenue > 0 ? (netIncome / revenue) * 100 : 0,
+        roe: totalEquity > 0 ? (netIncome / totalEquity) * 100 : 0,
+        roa: totalAssets > 0 ? (netIncome / totalAssets) * 100 : 0,
+        debtToEquity: totalEquity > 0 ? (totalLiabilities / totalEquity) * 100 : 0,
+      };
+    });
 }
 
 /** 判斷是否啟用 MOPS（始終免費） */

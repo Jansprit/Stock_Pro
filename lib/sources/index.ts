@@ -559,7 +559,27 @@ function parseAlphaDailyToPoints(
 export async function getFinancials(symbol: string): Promise<FinancialsData> {
   const sym = symbol.toUpperCase();
   return cached(`financials:${sym}`, DEFAULT_TTL, async () => {
-    // 1. Alpha Vantage（主源）
+    // 0. 台股個股 → MOPS XBRL 抓近 5 年年度累計（Alpha Vantage 對台股覆蓋極差）
+    if (sym.endsWith('.TW') || sym.endsWith('.TWO')) {
+      const rawSymbol = sym.replace(/\.(TW|TWO)$/, '');
+      // ETF 不適用（會回「檔案不存在」）
+      const mopsMulti = await withRetry('mops.multiyear', () =>
+        mopsXbrl.fetchMopsMultiYearFinancials(rawSymbol, 5),
+      );
+      if (mopsMulti && mopsMulti.length > 0) {
+        const years = mopsXbrl.mopsToFinancialYears(mopsMulti);
+        if (years.length > 0) {
+          return {
+            symbol: sym,
+            currency: 'TWD',
+            years,
+          };
+        }
+      }
+      console.log('[fallback] mops multi-year failed, trying alphavantage');
+    }
+
+    // 1. Alpha Vantage（主源，適用美股與部分全球股）
     if (alphaVantage.isAvailable()) {
       const result = await withRetry('alphavantage.financials', () => alphaVantage.fetchFinancials(sym));
       if (result && result.years.length > 0) return result;

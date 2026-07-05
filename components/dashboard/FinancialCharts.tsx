@@ -47,7 +47,9 @@ export function FinancialCharts({ overview, years, loading, error }: FinancialCh
     }
     // years 空但不是 loading → 真實無資料
     const isTaiwan = overview.symbol.endsWith('.TW') || overview.symbol.endsWith('.TWO');
-    const isEtf = /^\d{4,6}\.TWO?$/.test(overview.symbol);
+    // ETF 識別：4-6 位純數字且開頭為 00（0050/0056/00878）或 02（上市 ETF）；個股代號不會以此開頭
+    const rawNum = overview.symbol.replace(/\.(TW|TWO)$/, '');
+    const isEtf = isTaiwan && /^(00|02)\d{2,4}$/.test(rawNum);
     const isNewListing = (overview.founded ?? '') >= '2026';
     const reason = isEtf
       ? 'ETF 通常不揭露傳統三表（營收/淨利/現金流），本區塊需改由「成分股與淨值」視角分析。'
