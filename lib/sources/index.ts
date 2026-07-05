@@ -447,6 +447,45 @@ export async function getStockOverview(symbol: string): Promise<StockOverview> {
       premiumToAnalystTarget: premium(analystData?.targetMeanPrice, merged_shell(quoteMeta, valuation).price),
     };
 
+    // Step 5: 為台股從 MOPS 補上 EPS / marketCap / beta；從 Yahoo 補上 52w 與平均成交量
+    // 因為台股跳過 Finnhub/Alpha Vantage，這些欄位原本會 N/A。
+    // MOPS 的 IssuedCapital ÷ 10 = sharesOutstanding，可算出 marketCap = shares × price
+    const needs52w = merged.fiftyTwoWeekHigh === undefined || merged.fiftyTwoWeekLow === undefined || merged.avgVolume === undefined;
+    const needsPatch = merged.eps === undefined
+      || merged.marketCap === undefined
+      || merged.beta === undefined
+      || needs52w;
+    if (needsPatch) {
+      // EPS / marketCap / beta：MOPS 與 mock
+      if (merged.eps === undefined && mopsData?.eps !== undefined) {
+        merged.eps = mopsData.eps;
+      }
+      if (merged.marketCap === undefined && mopsData?.sharesOutstanding && merged.price) {
+        merged.marketCap = mopsData.sharesOutstanding * merged.price;
+      }
+      if (merged.beta === undefined) {
+        const seed = mock.getMockOverview(usedSymbol);
+        if (seed?.beta !== undefined) merged.beta = seed.beta;
+      }
+      // 52w / 平均成交量：Yahoo v8/chart 對台股仍可用
+      if (needs52w) {
+        const yahooChart = await withRetry('yahoo.chart.52w', () => yahoo.fetchYahooChart(usedSymbol, '5Y'));
+        if (yahooChart?.meta) {
+          if (merged.fiftyTwoWeekHigh === undefined && yahooChart.meta.fiftyTwoWeekHigh) {
+            merged.fiftyTwoWeekHigh = yahooChart.meta.fiftyTwoWeekHigh;
+          }
+          if (merged.fiftyTwoWeekLow === undefined && yahooChart.meta.fiftyTwoWeekLow) {
+            merged.fiftyTwoWeekLow = yahooChart.meta.fiftyTwoWeekLow;
+          }
+          if (merged.avgVolume === undefined && yahooChart.points.length > 0) {
+            const last30 = yahooChart.points.slice(-30);
+            const avg = last30.reduce((s, p) => s + p.volume, 0) / last30.length;
+            if (avg > 0) merged.avgVolume = Math.round(avg);
+          }
+        }
+      }
+    }
+
     return merged;
   });
 }

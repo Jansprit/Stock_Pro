@@ -318,6 +318,7 @@ export function getMockOverview(symbol: string): StockOverview | null {
     employees: seed.employees,
     founded: seed.founded ?? '',
     headquarters: seed.headquarters ?? '',
+    beta: seed.beta,
     ceo: '',
   };
 }
