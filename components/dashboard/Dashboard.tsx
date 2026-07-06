@@ -50,21 +50,24 @@ export function Dashboard({ data, aiError, onRefresh }: DashboardProps) {
             <RefreshCw className="h-3.5 w-3.5" />
             重新整理
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setShowPdfError(null);
-              print.open();
-            }}
-            className="
-              inline-flex items-center gap-1.5 rounded-md border border-brand-500/40
-              bg-brand-500/10 px-3 py-1.5 text-xs text-brand-300
-              transition-colors hover:bg-brand-500/20 hover:text-brand-100
-            "
-          >
-            <FileDown className="h-3.5 w-3.5" />
-            下載 PDF 報告
-          </button>
+          {/* PDF 按鈕暫時隱藏（功能保留，重啟用改 {false &&} 為 {true &&}） */}
+          {false && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowPdfError(null);
+                print.open();
+              }}
+              className="
+                inline-flex items-center gap-1.5 rounded-md border border-brand-500/40
+                bg-brand-500/10 px-3 py-1.5 text-xs text-brand-300
+                transition-colors hover:bg-brand-500/20 hover:text-brand-100
+              "
+            >
+              <FileDown className="h-3.5 w-3.5" />
+              下載 PDF 報告
+            </button>
+          )}
         </div>
       </div>
 
