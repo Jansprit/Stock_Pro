@@ -11,9 +11,11 @@ interface CompetitorTableProps {
   baseSymbol: string;
   loading?: boolean;
   error?: string | null;
+  /** AI 總結生成中（覆蓋 Skeleton，顯示載入動畫）*/
+  aiSummaryLoading?: boolean;
 }
 
-export function CompetitorTable({ data, baseSymbol, loading, error }: CompetitorTableProps) {
+export function CompetitorTable({ data, baseSymbol, loading, error, aiSummaryLoading }: CompetitorTableProps) {
   if (error) {
     return (
       <Card title="競爭對手比較">
@@ -101,7 +103,7 @@ export function CompetitorTable({ data, baseSymbol, loading, error }: Competitor
         </table>
       </div>
 
-      {data.aiSummary && (
+      {data.aiSummary ? (
         <div className="mt-4 rounded-lg border border-brand-500/20 bg-brand-500/5 p-4">
           <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-brand-400">
             <TrendingUp className="h-4 w-4" />
@@ -109,7 +111,18 @@ export function CompetitorTable({ data, baseSymbol, loading, error }: Competitor
           </div>
           <p className="text-sm leading-relaxed text-slate-300">{data.aiSummary}</p>
         </div>
-      )}
+      ) : aiSummaryLoading ? (
+        <div className="ai-summary-loading mt-4 rounded-lg border border-brand-500/20 bg-brand-500/5 p-4">
+          <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-brand-400">
+            <TrendingUp className="h-4 w-4 animate-pulse" />
+            AI 總結生成中
+          </div>
+          <div className="ai-summary-loading-bar">
+            <div className="ai-summary-loading-bar-fill" />
+          </div>
+          <p className="mt-1.5 text-xs text-slate-400">正在分析同業相對優劣…</p>
+        </div>
+      ) : null}
     </Card>
   );
 }

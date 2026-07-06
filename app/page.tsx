@@ -14,6 +14,8 @@ interface FetchState {
   error: string | null;
   data: DashboardData | null;
   aiError: string | null;
+  /** AI 報告正在生成中（首輪已載入、第二輪還沒回來） */
+  aiLoading: boolean;
 }
 
 export default function HomePage() {
@@ -22,6 +24,7 @@ export default function HomePage() {
     error: null,
     data: null,
     aiError: null,
+    aiLoading: false,
   });
 
   const loadStock = useCallback(async (symbol: string, isRefresh = false) => {
@@ -30,6 +33,7 @@ export default function HomePage() {
       error: null,
       data: isRefresh ? s.data : null, // 重整時保留舊資料，UX 較佳
       aiError: isRefresh ? s.aiError : null,
+      aiLoading: isRefresh ? s.aiLoading : false, // 重整時保留舊 AI loading 狀態
     }));
 
     try {
@@ -52,6 +56,7 @@ export default function HomePage() {
           error: errMsg,
           data: null,
           aiError: null,
+          aiLoading: false,
         });
         return;
       }
@@ -79,6 +84,7 @@ export default function HomePage() {
         loading: false,
         error: null,
         aiError: null,
+        aiLoading: true, // 標記 AI 報告開始生成
         data: {
           overview,
           financials,
@@ -143,12 +149,13 @@ export default function HomePage() {
         const aiData = await aiRes.json();
 
         if (aiData.error) {
-          setState((s) => ({ ...s, aiError: aiData.message }));
+          setState((s) => ({ ...s, aiError: aiData.message, aiLoading: false }));
         } else if (aiData.report) {
           // 把 AI 報告的 competitiveAnalysis 整合到 competitors.aiSummary
           setState((s) => ({
             ...s,
             aiError: null,
+            aiLoading: false,
             data: s.data
               ? {
                   ...s.data,
@@ -164,7 +171,7 @@ export default function HomePage() {
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'AI 分析失敗';
-        setState((s) => ({ ...s, aiError: msg }));
+        setState((s) => ({ ...s, aiError: msg, aiLoading: false }));
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : '載入發生錯誤';
@@ -173,6 +180,7 @@ export default function HomePage() {
         error: msg,
         data: null,
         aiError: null,
+        aiLoading: false,
       });
     }
   }, []);
@@ -216,6 +224,7 @@ export default function HomePage() {
           <Dashboard
             data={state.data}
             aiError={state.aiError}
+            isAiLoading={state.aiLoading}
             onRefresh={() => loadStock(state.data!.overview.symbol, true)}
           />
         )}

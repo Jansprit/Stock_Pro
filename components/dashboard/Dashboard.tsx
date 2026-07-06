@@ -15,6 +15,7 @@ import { ValuationPanel } from './ValuationPanel';
 import { PrintSectionSelector } from './PrintSectionSelector';
 import { usePrintSections } from '@/lib/hooks/usePrintSections';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
+import { AiLoading } from '@/components/ui/AiLoading';
 import { Card } from '@/components/ui/Card';
 import { Tag } from '@/components/ui/Tag';
 import type { DashboardData } from '@/lib/types';
@@ -22,10 +23,11 @@ import type { DashboardData } from '@/lib/types';
 interface DashboardProps {
   data: DashboardData;
   aiError?: string | null;
+  isAiLoading?: boolean;
   onRefresh: () => void;
 }
 
-export function Dashboard({ data, aiError, onRefresh }: DashboardProps) {
+export function Dashboard({ data, aiError, isAiLoading = false, onRefresh }: DashboardProps) {
   const { overview, financials, chart, news, competitors, aiReport, fetchedAt } = data;
   const print = usePrintSections(overview.symbol);
   const [showPdfError, setShowPdfError] = useState<string | null>(null);
@@ -110,6 +112,11 @@ export function Dashboard({ data, aiError, onRefresh }: DashboardProps) {
       {/* AI 分析（最優先顯示） */}
       {aiReport ? (
         <AIAnalysisPanel report={aiReport} stockName={overview.name} />
+      ) : isAiLoading ? (
+        <AiLoading
+          title="AI 分析報告生成中"
+          subtitle={`正在分析 ${overview.symbol} ${overview.name} 的 7 維度評分`}
+        />
       ) : aiError ? (
         <Card
           title={
@@ -140,10 +147,17 @@ export function Dashboard({ data, aiError, onRefresh }: DashboardProps) {
       <NewsList news={news} />
 
       {/* 競爭對手比較 */}
-      <CompetitorTable data={competitors} baseSymbol={overview.symbol} />
+      <CompetitorTable data={competitors} baseSymbol={overview.symbol} aiSummaryLoading={isAiLoading && !competitors.aiSummary} />
 
       {/* 完整研究報告（摺疊式） */}
-      {aiReport && <ResearchReport report={aiReport} stockName={overview.name} />}
+      {aiReport ? (
+        <ResearchReport report={aiReport} stockName={overview.name} />
+      ) : isAiLoading ? (
+        <AiLoading
+          title="完整研究報告生成中"
+          subtitle={`正在為 ${overview.symbol} ${overview.name} 撰寫財務分析、競爭分析、新聞影響與公司優勢`}
+        />
+      ) : null}
     </div>
   );
 }
