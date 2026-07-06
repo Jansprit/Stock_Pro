@@ -68,32 +68,105 @@ export function StockOverviewCard({ overview }: StockOverviewCardProps) {
         </div>
       </div>
 
-      {/* 數據網格 */}
-      <div className="relative mt-5 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-slate-800 pt-5 sm:grid-cols-4 lg:grid-cols-4">
-        <Metric label="市值" value={overview.marketCap ? formatCurrency(overview.marketCap, overview.currency) : 'N/A'} />
-        <Metric label="本益比 (TTM)" value={overview.trailingPE?.toFixed(2) ?? 'N/A'} />
-        <Metric label="EPS (TTM)" value={overview.eps?.toFixed(2) ?? 'N/A'} />
-        <Metric label="52週區間" value={
-          overview.fiftyTwoWeekLow !== undefined && overview.fiftyTwoWeekHigh !== undefined
-            ? `${formatCurrency(overview.fiftyTwoWeekLow, overview.currency)} ~ ${formatCurrency(overview.fiftyTwoWeekHigh, overview.currency)}`
-            : 'N/A'
-        } />
-        <Metric label="成交量" value={formatLargeNumber(overview.volume)} />
-        <Metric label="平均成交量" value={overview.avgVolume ? formatLargeNumber(overview.avgVolume) : 'N/A'} />
-        <Metric label="日內區間" value={
-          `${formatCurrency(overview.dayLow, overview.currency)} ~ ${formatCurrency(overview.dayHigh, overview.currency)}`
-        } />
-        <Metric label="Beta" value={overview.beta?.toFixed(2) ?? 'N/A'} />
+      {/* 數據網格（4×2 重組：左 4 欄重點、右 4 欄次要） */}
+      <div className="relative mt-5 grid grid-cols-2 gap-x-4 gap-y-4 border-t border-slate-800 pt-5 sm:grid-cols-4 lg:grid-cols-4">
+        <Metric
+          label="市值"
+          value={overview.marketCap ? formatCurrency(overview.marketCap, overview.currency) : 'N/A'}
+          delta={positionIn52w(overview)}
+        />
+        <Metric
+          label="本益比 (TTM)"
+          value={overview.trailingPE?.toFixed(2) ?? 'N/A'}
+        />
+        <Metric
+          label="EPS (TTM)"
+          value={overview.eps?.toFixed(2) ?? 'N/A'}
+        />
+        <Metric
+          label="52週區間"
+          value={
+            overview.fiftyTwoWeekLow !== undefined && overview.fiftyTwoWeekHigh !== undefined
+              ? `${formatCurrency(overview.fiftyTwoWeekLow, overview.currency)} ~ ${formatCurrency(overview.fiftyTwoWeekHigh, overview.currency)}`
+              : 'N/A'
+          }
+        />
+        <Metric
+          label="成交量"
+          value={formatLargeNumber(overview.volume)}
+          subValue={overview.avgVolume ? `均 ${formatLargeNumber(overview.avgVolume)}` : undefined}
+        />
+        <Metric
+          label="日內區間"
+          value={`${formatCurrency(overview.dayLow, overview.currency)} ~ ${formatCurrency(overview.dayHigh, overview.currency)}`}
+          delta={intraDayPosition(overview)}
+        />
+        <Metric
+          label="Beta"
+          value={overview.beta?.toFixed(2) ?? 'N/A'}
+          subValue={overview.beta ? (overview.beta >= 1 ? '波動大於大盤' : '波動小於大盤') : undefined}
+        />
+        <Metric
+          label="殖利率"
+          value={overview.dividendYield !== undefined ? `${overview.dividendYield.toFixed(2)}%` : 'N/A'}
+        />
       </div>
     </Card>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+/** 計算現價相對於 52 週區間的位置（% from low） */
+function positionIn52w(o: StockOverview): { pct: number; label: string } | undefined {
+  if (o.fiftyTwoWeekLow === undefined || o.fiftyTwoWeekHigh === undefined) return undefined;
+  const span = o.fiftyTwoWeekHigh - o.fiftyTwoWeekLow;
+  if (span <= 0) return undefined;
+  const pct = ((o.price - o.fiftyTwoWeekLow) / span) * 100;
+  return {
+    pct: Math.max(0, Math.min(100, pct)),
+    label: pct >= 80 ? '近 52週高' : pct <= 20 ? '近 52週低' : '中間',
+  };
+}
+
+/** 計算現價在日內區間的位置 */
+function intraDayPosition(o: StockOverview): { pct: number; label: string } | undefined {
+  const span = o.dayHigh - o.dayLow;
+  if (span <= 0) return undefined;
+  const pct = ((o.price - o.dayLow) / span) * 100;
+  return {
+    pct: Math.max(0, Math.min(100, pct)),
+    label: pct >= 80 ? '近盤中高' : pct <= 20 ? '近盤中低' : '中間',
+  };
+}
+
+function Metric({ label, value, delta, subValue }: {
+  label: string;
+  value: string;
+  delta?: { pct: number; label: string };
+  subValue?: string;
+}) {
   return (
     <div>
-      <div className="text-xs text-slate-500">{label}</div>
+      <div className="flex items-center justify-between text-xs text-slate-500">
+        <span>{label}</span>
+        {delta && (
+          <span className={`text-[10px] font-medium ${delta.pct >= 80 ? 'text-bear-400' : delta.pct <= 20 ? 'text-bull-400' : 'text-slate-500'}`}>
+            {delta.label}
+          </span>
+        )}
+      </div>
       <div className="mt-0.5 truncate text-sm font-semibold text-slate-100">{value}</div>
+      {/* 位置進度條 */}
+      {delta && (
+        <div className="mt-1 h-0.5 w-full overflow-hidden rounded-full bg-slate-800">
+          <div
+            className={`h-full rounded-full ${delta.pct >= 80 ? 'bg-bear-500' : delta.pct <= 20 ? 'bg-bull-500' : 'bg-slate-500'}`}
+            style={{ width: `${delta.pct}%` }}
+          />
+        </div>
+      )}
+      {subValue && (
+        <div className="mt-0.5 text-[10px] text-slate-500">{subValue}</div>
+      )}
     </div>
   );
 }

@@ -75,6 +75,7 @@ export function NewsList({ news, loading, error }: NewsListProps) {
             href={n.link || '#'}
             target="_blank"
             rel="noopener noreferrer"
+            data-pdf-block="news-item"
             className="
               group block rounded-lg border border-slate-800 bg-slate-900/40 p-3
               transition-all hover:border-slate-700 hover:bg-slate-800/50

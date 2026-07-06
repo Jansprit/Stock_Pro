@@ -76,6 +76,8 @@ export function ValuationPanel({ overview }: ValuationPanelProps) {
         <PriceRangeBar
           fairValue={overview.fairValue!}
           analystTarget={overview.analystTargetMean!}
+          analystLow={overview.analystTargetLow}
+          analystHigh={overview.analystTargetHigh}
           currentPrice={overview.price}
           currency={overview.currency}
         />
@@ -197,41 +199,59 @@ function RangeBar({
   );
 }
 
-/** 三點水平條：模型公允 / 現價 / 分析師目標 */
+/** 三點水平條：分析師目標區間半透明綠帶 + 現價/模型公允/分析師目標三條標記線 */
 function PriceRangeBar({
-  fairValue, analystTarget, currentPrice, currency,
-}: { fairValue: number; analystTarget: number; currentPrice: number; currency: string }) {
-  const min = Math.min(fairValue, analystTarget, currentPrice);
-  const max = Math.max(fairValue, analystTarget, currentPrice);
-  const span = max - min || 1;
-  const pct = (v: number) => Math.max(0, Math.min(100, ((v - min) / span) * 100));
+  fairValue, analystTarget, currentPrice, analystLow, analystHigh, currency,
+}: {
+  fairValue: number;
+  analystTarget: number;
+  currentPrice: number;
+  analystLow?: number;
+  analystHigh?: number;
+  currency: string;
+}) {
+  // 用分析師目標區間作為座標軸範圍（更語意化）
+  const lo = analystLow ?? Math.min(fairValue, analystTarget, currentPrice);
+  const hi = analystHigh ?? Math.max(fairValue, analystTarget, currentPrice);
+  const span = hi - lo || 1;
+  const pct = (v: number) => Math.max(0, Math.min(100, ((v - lo) / span) * 100));
   return (
-    <div className="mt-4 rounded-lg border border-slate-800 bg-slate-900/40 p-4">
-      <div className="relative h-6">
-        {/* 模型公允價值標記 */}
-        <Marker pct={pct(fairValue)} color="bg-emerald-500" label={`模型 ${formatCurrency(fairValue, currency)}`} />
-        {/* 分析師目標 */}
-        <Marker pct={pct(analystTarget)} color="bg-brand-500" label={`目標 ${formatCurrency(analystTarget, currency)}`} />
-        {/* 現價 */}
-        <Marker pct={pct(currentPrice)} color="bg-amber-400" label={`現價 ${formatCurrency(currentPrice, currency)}`} bold />
+    <div className="mt-5 pdf-valuation-bar">
+      <div className="pdf-valuation-bar-title">價格相對分析師目標區間</div>
+      <div className="relative h-16 mt-3">
+        {/* 分析師目標區間：半透明綠帶 */}
+        <div className="pdf-range-band">
+          <div className="pdf-range-band-label">
+            目標區間 {formatCurrency(lo, currency)} ~ {formatCurrency(hi, currency)}
+          </div>
+        </div>
+        {/* 三條標記線 + 統一上方標籤 */}
+        <div className="pdf-marker pdf-marker-current" style={{ left: `${pct(currentPrice)}%` }}>
+          <div className="pdf-marker-dot" />
+          <div className="pdf-marker-label">
+            <div className="pdf-marker-name">現價</div>
+            <div className="pdf-marker-value">{formatCurrency(currentPrice, currency)}</div>
+          </div>
+        </div>
+        <div className="pdf-marker pdf-marker-fair" style={{ left: `${pct(fairValue)}%` }}>
+          <div className="pdf-marker-dot" />
+          <div className="pdf-marker-label">
+            <div className="pdf-marker-name">量化公允</div>
+            <div className="pdf-marker-value">{formatCurrency(fairValue, currency)}</div>
+          </div>
+        </div>
+        <div className="pdf-marker pdf-marker-analyst" style={{ left: `${pct(analystTarget)}%` }}>
+          <div className="pdf-marker-dot" />
+          <div className="pdf-marker-label">
+            <div className="pdf-marker-name">分析師目標</div>
+            <div className="pdf-marker-value">{formatCurrency(analystTarget, currency)}</div>
+          </div>
+        </div>
       </div>
-      <div className="mt-2 flex justify-between text-xs text-slate-500">
-        <span>{formatCurrency(min, currency)}</span>
-        <span>{formatCurrency(max, currency)}</span>
+      <div className="pdf-valuation-bar-axis">
+        <span>{formatCurrency(lo, currency)}</span>
+        <span>{formatCurrency(hi, currency)}</span>
       </div>
-    </div>
-  );
-}
-
-function Marker({ pct, color, label, bold }: { pct: number; color: string; label: string; bold?: boolean }) {
-  return (
-    <div
-      className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2"
-      style={{ left: `${pct}%` }}
-      title={label}
-    >
-      <div className={`h-3 w-3 rounded-full ${color} ${bold ? 'ring-2 ring-slate-100' : ''}`} />
-      <div className={`mt-1 whitespace-nowrap text-[10px] ${bold ? 'font-semibold text-slate-100' : 'text-slate-500'}`}>{label}</div>
     </div>
   );
 }

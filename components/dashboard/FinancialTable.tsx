@@ -86,7 +86,7 @@ export function FinancialTable({ overview, years, loading, error }: FinancialTab
       subtitle={`近 ${sortedYears.length} 年（${oldest?.year ?? ''} ~ ${sortedYears[0]?.year}）`}
     >
       {/* Tabs */}
-      <div className="mb-4 flex gap-2 border-b border-slate-800">
+      <div className="no-print-tab mb-4 flex gap-2 border-b border-slate-800">
         {TABS.map((t) => (
           <button
             key={t.key}
@@ -116,7 +116,7 @@ export function FinancialTable({ overview, years, loading, error }: FinancialTab
                 ))}
               </tr>
             </thead>
-            <tbody>
+            <tbody data-pdf-block="financial-rows">
               <Row label="營收" cells={sortedYears.map((y) => formatCurrency(y.revenue, overview.currency))} />
               <Row label="毛利" cells={sortedYears.map((y) => formatCurrency(y.grossProfit, overview.currency))} />
               <Row label="營業利益" cells={sortedYears.map((y) => formatCurrency(y.operatingIncome, overview.currency))} />
@@ -141,7 +141,7 @@ export function FinancialTable({ overview, years, loading, error }: FinancialTab
                 ))}
               </tr>
             </thead>
-            <tbody>
+            <tbody data-pdf-block="financial-rows-growth">
               <Row
                 label="營收 YoY"
                 cells={growthRows.map((g) => formatPercent(g.revenue, 2, true))}
@@ -177,7 +177,7 @@ export function FinancialTable({ overview, years, loading, error }: FinancialTab
                 ))}
               </tr>
             </thead>
-            <tbody>
+            <tbody data-pdf-block="financial-rows-safety">
               <Row label="總資產" cells={sortedYears.map((y) => formatCurrency(y.totalAssets, overview.currency))} />
               <Row label="總負債" cells={sortedYears.map((y) => formatCurrency(y.totalLiabilities, overview.currency))} />
               <Row label="股東權益" cells={sortedYears.map((y) => formatCurrency(y.totalEquity, overview.currency))} />

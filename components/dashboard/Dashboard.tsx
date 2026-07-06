@@ -1,6 +1,7 @@
 'use client';
 
-import { RefreshCw, Sparkles } from 'lucide-react';
+import { useState } from 'react';
+import { RefreshCw, Sparkles, FileDown } from 'lucide-react';
 import { StockOverviewCard } from './StockOverviewCard';
 import { PriceChart } from './PriceChart';
 import { FinancialCharts } from './FinancialCharts';
@@ -11,6 +12,8 @@ import { CompetitorTable } from './CompetitorTable';
 import { AIAnalysisPanel } from './AIAnalysisPanel';
 import { ResearchReport } from './ResearchReport';
 import { ValuationPanel } from './ValuationPanel';
+import { PrintSectionSelector } from './PrintSectionSelector';
+import { usePrintSections } from '@/lib/hooks/usePrintSections';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { Card } from '@/components/ui/Card';
 import { Tag } from '@/components/ui/Tag';
@@ -24,27 +27,70 @@ interface DashboardProps {
 
 export function Dashboard({ data, aiError, onRefresh }: DashboardProps) {
   const { overview, financials, chart, news, competitors, aiReport, fetchedAt } = data;
+  const print = usePrintSections(overview.symbol);
+  const [showPdfError, setShowPdfError] = useState<string | null>(null);
 
   return (
     <div className="space-y-5 animate-fade-in">
-      {/* 頂部：總覽 + 重整 */}
-      <div className="flex items-center justify-between">
+      {/* 頂部：總覽 + 重整 + 下載 PDF */}
+      <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-xs text-slate-500">
           <Tag variant="default">資料時間：{new Date(fetchedAt).toLocaleString('zh-TW')}</Tag>
         </div>
-        <button
-          type="button"
-          onClick={onRefresh}
-          className="
-            inline-flex items-center gap-1.5 rounded-md border border-slate-700
-            bg-slate-800/60 px-3 py-1.5 text-xs text-slate-300
-            transition-colors hover:bg-slate-700 hover:text-slate-100
-          "
-        >
-          <RefreshCw className="h-3.5 w-3.5" />
-          重新整理
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onRefresh}
+            className="
+              inline-flex items-center gap-1.5 rounded-md border border-slate-700
+              bg-slate-800/60 px-3 py-1.5 text-xs text-slate-300
+              transition-colors hover:bg-slate-700 hover:text-slate-100
+            "
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            重新整理
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowPdfError(null);
+              print.open();
+            }}
+            className="
+              inline-flex items-center gap-1.5 rounded-md border border-brand-500/40
+              bg-brand-500/10 px-3 py-1.5 text-xs text-brand-300
+              transition-colors hover:bg-brand-500/20 hover:text-brand-100
+            "
+          >
+            <FileDown className="h-3.5 w-3.5" />
+            下載 PDF 報告
+          </button>
+        </div>
       </div>
+
+      {/* PDF 錯誤提示 */}
+      {showPdfError && (
+        <ErrorMessage
+          title="PDF 生成失敗"
+          message={showPdfError}
+        />
+      )}
+
+      {/* 列印區塊選擇 Modal */}
+      {print.isOpen && (
+        <PrintSectionSelector
+          symbol={overview.symbol}
+          stockName={overview.name}
+          selected={print.selected}
+          onChange={print.setSelected}
+          generating={print.generating}
+          onConfirm={async () => {
+            const ok = await print.generatePdf();
+            if (!ok && print.error) setShowPdfError(print.error);
+          }}
+          onClose={print.close}
+        />
+      )}
 
       {/* 總覽卡片 */}
       <StockOverviewCard overview={overview} />

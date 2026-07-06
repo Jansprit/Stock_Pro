@@ -9,10 +9,12 @@ import type { AIReport } from '@/lib/types';
 interface ResearchReportProps {
   report: AIReport;
   stockName: string;
+  /** 列印模式：預設展開且隱藏收合按鈕 */
+  defaultExpanded?: boolean;
 }
 
-export function ResearchReport({ report, stockName }: ResearchReportProps) {
-  const [expanded, setExpanded] = useState(false);
+export function ResearchReport({ report, stockName, defaultExpanded = false }: ResearchReportProps) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
 
   const sections = [
     { title: '財務表現分析', content: report.financialAnalysis },
@@ -56,7 +58,7 @@ export function ResearchReport({ report, stockName }: ResearchReportProps) {
       ) : (
         <div className="space-y-6">
           {sections.map((s) => (
-            <section key={s.title}>
+            <section key={s.title} data-pdf-block="research-chapter">
               <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-100">
                 <span className="h-1 w-1 rounded-full bg-brand-500" />
                 {s.title}
