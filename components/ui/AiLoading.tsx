@@ -74,40 +74,9 @@ export function AiLoading({
       subtitle={subtitle}
     >
       <div className="ai-loading" style={{ minHeight: height }}>
-        {/* 液態玻璃背景層 */}
+        {/* 液態玻璃背景層（保留） */}
         <div className="ai-loading-bg" />
         <div className="ai-loading-glow" />
-
-        {/* 液態波浪（SVG） */}
-        <svg
-          className="ai-loading-wave"
-          viewBox="0 0 1200 200"
-          preserveAspectRatio="none"
-          aria-hidden="true"
-        >
-          <defs>
-            <linearGradient id="aiWaveGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.4" />
-              <stop offset="50%" stopColor="#1e40af" stopOpacity="0.6" />
-              <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.4" />
-            </linearGradient>
-            <linearGradient id="aiWaveGrad2" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.25" />
-              <stop offset="50%" stopColor="#3b82f6" stopOpacity="0.45" />
-              <stop offset="100%" stopColor="#60a5fa" stopOpacity="0.25" />
-            </linearGradient>
-          </defs>
-          <path
-            className="ai-wave-1"
-            d="M0,100 C200,140 400,60 600,100 C800,140 1000,60 1200,100 L1200,200 L0,200 Z"
-            fill="url(#aiWaveGrad)"
-          />
-          <path
-            className="ai-wave-2"
-            d="M0,120 C200,80 400,160 600,120 C800,80 1000,160 1200,120 L1200,200 L0,200 Z"
-            fill="url(#aiWaveGrad2)"
-          />
-        </svg>
 
         {/* 中央內容 */}
         <div className="ai-loading-content">

@@ -77,14 +77,6 @@ body {
   background-size: 50% 100%;
   animation: ai-summary-shimmer 1.5s linear infinite;
 }
-@keyframes ai-wave-flow {
-  0% { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
-}
-@keyframes ai-wave-flow-2 {
-  0% { transform: translateX(0); }
-  100% { transform: translateX(50%); }
-}
 @keyframes ai-icon-pulse {
   0%, 100% { transform: scale(1); opacity: 1; }
   50% { transform: scale(1.08); opacity: 0.85; }
@@ -130,22 +122,6 @@ body {
   filter: blur(20px);
   animation: ai-glow-pulse 3s ease-in-out infinite;
   pointer-events: none;
-}
-.ai-loading-wave {
-  position: absolute;
-  bottom: 0;
-  left: -50%;
-  width: 200%;
-  height: 60px;
-  pointer-events: none;
-}
-.ai-wave-1 {
-  animation: ai-wave-flow 8s linear infinite;
-  transform-origin: center bottom;
-}
-.ai-wave-2 {
-  animation: ai-wave-flow-2 12s linear infinite;
-  transform-origin: center bottom;
 }
 
 .ai-loading-content {
