@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Card } from '@/components/ui/Card';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
@@ -27,9 +27,13 @@ export function PriceChart({ symbol, overview, initialData, initialRange }: Pric
   const [data, setData] = useState<PricePoint[]>(initialData);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 用 ref 標記是否已 fetch 過這個 range（避免初次切回 initialRange 時跳過 fetch）
+  const fetchedRef = useRef<Set<ChartRange>>(new Set([initialRange]));
 
   useEffect(() => {
-    if (range === initialRange) return; // 初次載入已用 initialData
+    // 已 fetch 過這個 range（包含 initialRange 與先前切過的）就直接跳過
+    if (fetchedRef.current.has(range)) return;
+    fetchedRef.current.add(range);
     setLoading(true);
     setError(null);
     fetch(`/api/chart/${encodeURIComponent(symbol)}?range=${range}`)
@@ -41,7 +45,7 @@ export function PriceChart({ symbol, overview, initialData, initialRange }: Pric
       .then((points) => setData(points))
       .catch((err) => setError(err instanceof Error ? err.message : '載入失敗'))
       .finally(() => setLoading(false));
-  }, [range, symbol, initialRange]);
+  }, [range, symbol]);
 
   const isPositive = data.length > 0 && data[data.length - 1].close >= data[0].close;
   const chartColor = isPositive ? '#10b981' : '#ef4444';

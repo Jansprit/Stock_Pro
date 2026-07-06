@@ -63,6 +63,8 @@ export interface MopsFundamentals {
 
   /** 營業利益（元） */
   operatingIncome?: number;
+  /** 毛利（元） */
+  grossProfit?: number;
   /** 折舊與攤銷（元） */
   depreciationAmortization?: number;
   /** 推算 EBITDA = operatingIncome + D&A */
@@ -272,6 +274,10 @@ function parseMopsXbrl(html: string, rawSymbol: string, period: string, season: 
     ?? pickRecentFlow(all.get('ifrs-full:OperatingProfitLoss'));
   const operatingIncome = opIncomeV ? parseNum(opIncomeV) : undefined;
 
+  // 毛利（MOPS XBRL 有 GrossProfit 標籤，優先抓真實值；缺時 fallback revenue * 0.4）
+  const grossProfitV = pickRecentFlow(all.get('ifrs-full:GrossProfit'));
+  const grossProfit = grossProfitV ? parseNum(grossProfitV) : undefined;
+
   // 折舊與攤銷（XBRL 內不一定有，可能要從現金流量表的 Adjustments 推）
   const depAmortV = pickRecentFlow(all.get('ifrs-full:DepreciationAmortisation'))
     ?? pickRecentFlow(all.get('ifrs-full:DepreciationAndAmortisation'))
@@ -315,6 +321,7 @@ function parseMopsXbrl(html: string, rawSymbol: string, period: string, season: 
     longtermBorrowings: longtermBorrowings || undefined,
     totalDebt,
     operatingIncome,
+    grossProfit,
     depreciationAmortization,
     ebitda,
     issuedCapital,
@@ -359,7 +366,7 @@ export function mopsToFinancialYears(data: MopsFundamentals[]): FinancialYear[] 
     .filter((d) => d.revenue !== undefined || d.netIncome !== undefined || d.eps !== undefined)
     .map((d) => {
       const revenue = d.revenue ?? 0;
-      const grossProfit = d.revenue ? d.revenue * 0.4 : 0; // MOPS 沒直接毛利，用 40% 推估（會在面板標示）
+      const grossProfit = d.grossProfit ?? (d.revenue ? d.revenue * 0.4 : 0); // 優先 MOPS 真實 GrossProfit，缺時 fallback revenue * 0.4
       const operatingIncome = d.operatingIncome ?? 0;
       const netIncome = d.netIncome ?? 0;
       const eps = d.eps ?? 0;
