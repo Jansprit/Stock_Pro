@@ -31,19 +31,27 @@ export default function HomePage() {
     setState((s) => ({
       loading: true,
       error: null,
-      data: isRefresh ? s.data : null, // 重整時保留舊資料，UX 較佳
+      // 重整時也清空 data（避免舊 stocks 殘留的 financials.years 顯示「無資料」）
+      data: null,
       aiError: isRefresh ? s.aiError : null,
-      aiLoading: isRefresh ? s.aiLoading : false, // 重整時保留舊 AI loading 狀態
+      aiLoading: isRefresh ? s.aiLoading : false,
     }));
 
     try {
-      // 平行抓取基礎資料
+      // 平行抓取基礎資料（每個 fetch 60s timeout，避免 MOPS cold start 拖太久）
+      const fetchWithTimeout = (url: string, ms = 60000) => {
+        const c = new AbortController();
+        const id = setTimeout(() => c.abort(), ms);
+        return fetch(url, { signal: c.signal })
+          .then((r) => r.json())
+          .finally(() => clearTimeout(id));
+      };
       const [overviewRes, financialsRes, chartRes, newsRes, competitorsRes] = await Promise.allSettled([
-        fetch(`/api/stock/${encodeURIComponent(symbol)}`).then((r) => r.json()),
-        fetch(`/api/financials/${encodeURIComponent(symbol)}`).then((r) => r.json()),
-        fetch(`/api/chart/${encodeURIComponent(symbol)}?range=1Y`).then((r) => r.json()),
-        fetch(`/api/news/${encodeURIComponent(symbol)}`).then((r) => r.json()),
-        fetch(`/api/competitors/${encodeURIComponent(symbol)}`).then((r) => r.json()),
+        fetchWithTimeout(`/api/stock/${encodeURIComponent(symbol)}`),
+        fetchWithTimeout(`/api/financials/${encodeURIComponent(symbol)}`),
+        fetchWithTimeout(`/api/chart/${encodeURIComponent(symbol)}?range=1Y`),
+        fetchWithTimeout(`/api/news/${encodeURIComponent(symbol)}`),
+        fetchWithTimeout(`/api/competitors/${encodeURIComponent(symbol)}`),
       ]);
 
       // 檢查 overview（必要欄位）
@@ -63,9 +71,22 @@ export default function HomePage() {
 
       const overview = overviewRes.value.overview;
 
-      const financials = financialsRes.status === 'fulfilled' && !financialsRes.value.error
-        ? financialsRes.value.financials
-        : { symbol, currency: overview.currency, years: [] };
+      // 處理 financials：若 API 失敗或超時，嘗試重試一次（30s 內）
+      let financials = { symbol, currency: overview.currency, years: [] };
+      const isFinFailed = financialsRes.status !== 'fulfilled' || financialsRes.value?.error;
+      if (isFinFailed) {
+        console.warn('[page] financials 初次失敗，重試一次...');
+        try {
+          const retry = await fetchWithTimeout(`/api/financials/${encodeURIComponent(symbol)}`);
+          if (retry && !retry.error && retry.financials) {
+            financials = retry.financials;
+          }
+        } catch (e) {
+          console.warn('[page] financials 重試也失敗:', e instanceof Error ? e.message : e);
+        }
+      } else {
+        financials = financialsRes.value.financials;
+      }
 
       const chartPoints = chartRes.status === 'fulfilled' && !chartRes.value.error
         ? chartRes.value.points
