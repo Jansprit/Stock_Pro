@@ -27,13 +27,15 @@ export function PriceChart({ symbol, overview, initialData, initialRange }: Pric
   const [data, setData] = useState<PricePoint[]>(initialData);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // 用 ref 標記是否已 fetch 過這個 range（避免初次切回 initialRange 時跳過 fetch）
-  const fetchedRef = useRef<Set<ChartRange>>(new Set([initialRange]));
+  // 標記初始 range（避免初次 mount 重複抓 initialRange）
+  const initializedRef = useRef<boolean>(false);
 
   useEffect(() => {
-    // 已 fetch 過這個 range（包含 initialRange 與先前切過的）就直接跳過
-    if (fetchedRef.current.has(range)) return;
-    fetchedRef.current.add(range);
+    // 初次 mount：略過 fetch（data 已從 initialData 帶入）
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      return;
+    }
     setLoading(true);
     setError(null);
     fetch(`/api/chart/${encodeURIComponent(symbol)}?range=${range}`)
