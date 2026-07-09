@@ -13,7 +13,8 @@ export function Skeleton({ className = '', variant = 'rect' }: SkeletonProps) {
   return (
     <div
       className={`
-        animate-pulse-soft bg-slate-800/60
+        animate-pulse-soft bg-slate-300/60
+        dark:bg-slate-800/60
         ${variantClass} ${className}
       `}
       aria-label="載入中"
@@ -24,7 +25,7 @@ export function Skeleton({ className = '', variant = 'rect' }: SkeletonProps) {
 /** 整個區塊的骨架屏 */
 export function CardSkeleton() {
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
+    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/60 dark:shadow-none">
       <Skeleton className="mb-3 h-5 w-1/3" />
       <Skeleton className="mb-2 h-3 w-full" />
       <Skeleton className="mb-2 h-3 w-5/6" />
