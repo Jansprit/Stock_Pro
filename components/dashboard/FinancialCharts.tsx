@@ -103,7 +103,9 @@ export function FinancialCharts({ overview, years, loading, error }: FinancialCh
                 <XAxis dataKey="year" stroke="var(--ink-tertiary)" tick={{ fontSize: 11 }} />
                 <YAxis stroke="var(--ink-tertiary)" tick={{ fontSize: 11 }} tickFormatter={(v) => `${v.toFixed(0)}%`} width={45} />
                 <Tooltip
-                  contentStyle={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12, color: 'var(--ink-primary)' }}
+                  contentStyle={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12, color: 'var(--ink-primary)', fill: 'var(--ink-primary)' }}
+                  itemStyle={{ color: 'var(--ink-primary)', fill: 'var(--ink-primary)' }}
+                  labelStyle={{ color: 'var(--ink-secondary)' }}
                   formatter={(v: number, name: string) => [`${v.toFixed(2)}%`, name === 'value' ? '毛利率' : '淨利率']}
                 />
                 <Line type="monotone" dataKey="value" name="毛利率" stroke="#f59e0b" strokeWidth={2} dot={{ fill: '#f59e0b', r: 3 }} isAnimationActive={false} />
@@ -123,7 +125,9 @@ export function FinancialCharts({ overview, years, loading, error }: FinancialCh
                 <XAxis dataKey="year" stroke="var(--ink-tertiary)" tick={{ fontSize: 11 }} />
                 <YAxis stroke="var(--ink-tertiary)" tick={{ fontSize: 11 }} tickFormatter={(v) => formatCurrency(v, overview.currency)} width={70} />
                 <Tooltip
-                  contentStyle={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12, color: 'var(--ink-primary)' }}
+                  contentStyle={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12, color: 'var(--ink-primary)', fill: 'var(--ink-primary)' }}
+                  itemStyle={{ color: 'var(--ink-primary)', fill: 'var(--ink-primary)' }}
+                  labelStyle={{ color: 'var(--ink-secondary)' }}
                   formatter={(v: number, name: string) => [formatCurrency(v, overview.currency), name === 'operating' ? '營運現金流' : '自由現金流']}
                 />
                 <ReferenceLine y={0} stroke="var(--border-strong)" />
@@ -171,7 +175,16 @@ function ChartBox({ title, data, color, format, currency }: ChartBoxProps) {
               width={70}
             />
             <Tooltip
-              contentStyle={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12, color: 'var(--ink-primary)' }}
+              contentStyle={{
+                background: 'var(--surface-card)',
+                border: '1px solid var(--border-default)',
+                borderRadius: 8,
+                fontSize: 12,
+                color: 'var(--ink-primary)',
+                fill: 'var(--ink-primary)',
+              }}
+              itemStyle={{ color: 'var(--ink-primary)', fill: 'var(--ink-primary)' }}
+              labelStyle={{ color: 'var(--ink-secondary)' }}
               formatter={(v: number) => [format === 'currency' ? formatCurrency(v, currency) : v.toFixed(2), title]}
             />
             {hasNegative && <ReferenceLine y={0} stroke="var(--border-strong)" />}

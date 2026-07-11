@@ -119,7 +119,9 @@ export function PriceChart({ symbol, overview, initialData, initialRange }: Pric
                   borderRadius: 8,
                   fontSize: 12,
                   color: 'var(--ink-primary)',
+                  fill: 'var(--ink-primary)',
                 }}
+                itemStyle={{ color: 'var(--ink-primary)', fill: 'var(--ink-primary)' }}
                 labelStyle={{ color: 'var(--ink-secondary)' }}
                 formatter={(value: number) => [formatFullCurrency(value, overview.currency), '收盤價']}
               />
