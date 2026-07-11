@@ -734,22 +734,60 @@ async function fetchCompetitorMetricsOne(symbol: string): Promise<Partial<Compet
   const sym = symbol.toUpperCase();
   const isTaiwan = sym.endsWith('.TW') || sym.endsWith('.TWO');
 
-  // 台股：走 MIS（無需 key、權威）+ TWSE BWIBBU 拿 PE/PB
+  // 台股：走 MIS（無需 key、權威）+ TWSE BWIBBU 拿 PE/PB + MOPS XBRL 拿毛利率/淨利率/EPS/ROE + 市值
   if (isTaiwan) {
     const rawSymbol = sym.replace(/\.(TW|TWO)$/, '');
+
+    // (a) TWSE MIS 即時報價
     const twseQuote = await withRetry('twse.mis', () => twse.fetchSingleQuote(rawSymbol));
     if (twseQuote) {
-      // MIS 沒給市值/PE/PB；只能由 Finnhub metric 補（但 Finnhub 對台股常無資料）
-      // 至少把 52w high/low 留空，交給 seed/market position 處理
       if (twseQuote.high > 0) out.fiftyTwoWeekHigh = twseQuote.high;
       if (twseQuote.low > 0) out.fiftyTwoWeekLow = twseQuote.low;
     }
-    // TWSE 估值（限 .TW）
+
+    // (b) TWSE BWIBBU 估值（限 .TW 上市，給 PE / PB / 殖利率）
     if (sym.endsWith('.TW')) {
       const val = await withRetry('twse.bwibbu', () => twse.fetchTwseValuation(rawSymbol));
       if (val && val.pe > 0) out.pe = val.pe;
+      if (val && val.pb > 0) out.pb = val.pb;
       if (val && val.dividendYield > 0) out.dividendYield = val.dividendYield;
     }
+
+    // (c) MOPS XBRL 拿財務指標（revenue / grossProfit / netIncome / eps / equity）
+    //     → 推算 grossMargin / netMargin / roe / marketCap（用股本 × 收盤價）
+    try {
+      const mops = await mopsXbrl.fetchMopsFundamentals(rawSymbol);
+      if (mops) {
+        // annualize: 若 isAnnual=false（單季），×4 變年化（粗估，僅供同業比較用）
+        const factor = mops.isAnnual ? 1 : 4;
+        const revenue = mops.revenue !== undefined ? mops.revenue * factor : undefined;
+        const grossProfit = mops.grossProfit !== undefined ? mops.grossProfit * factor : undefined;
+        const netIncome = mops.netIncome !== undefined ? mops.netIncome * factor : undefined;
+        const equity = mops.equity;
+        if (grossProfit !== undefined && revenue && revenue > 0) {
+          out.grossMargin = (grossProfit / revenue) * 100;
+        }
+        if (netIncome !== undefined && revenue && revenue > 0) {
+          out.netMargin = (netIncome / revenue) * 100;
+        }
+        if (mops.eps !== undefined) {
+          // 若單季 EPS，年化要 ×4；MOPS 內已記錄 isAnnual
+          out.eps = mops.eps * factor;
+        }
+        if (netIncome !== undefined && equity && equity > 0) {
+          out.roe = (netIncome / equity) * 100;
+        }
+        // 市值 = 股本（元，已含 ×1000 換算後的元）÷ 10（每股面額） × 股價
+        // MOPS issuedCapital 單位是元；每股面額 = 10 元 → 流通股數 = issuedCapital / 10
+        if (mops.issuedCapital && mops.issuedCapital > 0 && twseQuote && twseQuote.price > 0) {
+          const shares = mops.issuedCapital / 10;
+          out.marketCap = shares * twseQuote.price;
+        }
+      }
+    } catch (err) {
+      console.warn(`[competitors] mops ${rawSymbol} failed:`, err);
+    }
+
     return out;
   }
 
