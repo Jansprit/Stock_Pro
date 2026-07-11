@@ -31,6 +31,16 @@ export interface StockOverview {
   avgVolume?: number;
   marketCap?: number;
   trailingPE?: number;
+  /** 額外基本資料（從 Goodinfo 等台股網站擷取，optional） */
+  chairman?: string;
+  twseIndustry?: string;
+  ipoDate?: string;
+  mainProducts?: string;
+  address?: string;
+  employeeCount?: number;
+  president?: string;
+  spokesperson?: string;
+  capitalPaidIn?: number;
   forwardPE?: number;
   eps?: number;
   beta?: number;
