@@ -141,19 +141,35 @@ function parseCompanyPage(html: string, url: string, raw: string): GoodinfoCompa
   out.chairman = grab('董事長');
   out.president = grab('總經理');
   out.spokesperson = grab('發言人');
-  out.address = grab('總公司地址') ?? grab('公司地址');
-  out.mainProducts = grab('主要產品') ?? grab('經營業務');
-  out.taxId = grab('統一編號');
-
-  const ipoDate = grab('上市日期') ?? grab('上櫃日期');
-  if (ipoDate) out.ipoDate = ipoDate;
-  out.listingDate = out.ipoDate;
-
-  const employeeText = grab('員工人數') ?? grab('員工總人數');
-  if (employeeText) {
-    const n = parseInt(employeeText.replace(/[^\d]/g, ''), 10);
-    if (!isNaN(n)) out.employeeCount = n;
+  // Goodinfo 個股頁只有「地址」(非「總公司地址」)
+  out.address = grab('地址');
+  // 「主要業務」是 Goodinfo 標準 label（不是「主要產品」）
+  // 注意 td 內可能含 <p>、<span> 等子元素，要容許
+  const grabCellHtml = (label: string): string | undefined => {
+    const re = new RegExp(
+      `<th[^>]*>[\\s\\S]*?${label}[\\s\\S]*?</th>[\\s\\S]*?<td[^>]*>([\\s\\S]*?)</td>`,
+      'i',
+    );
+    const m = html.match(re);
+    return m ? stripTags(m[1]).trim() : undefined;
+  };
+  out.mainProducts = grabCellHtml('主要業務') ?? grabCellHtml('主要產品') ?? grabCellHtml('經營業務');
+  // 上市日期 → Goodinfo 用「掛牌日」
+  // Goodinfo 的值常夾帶 &nbsp;[30.2年] 雜訊，清理掉
+  const rawIpo = grab('掛牌日') ?? grab('上市日期') ?? grab('上櫃日期');
+  if (rawIpo) {
+    const cleaned = rawIpo
+      .replace(/&nbsp;/gi, '')
+      .replace(/\s*\[[\d.]+[年月日]+\]\s*$/, '')  // 結尾的「[30.2年]」
+      .replace(/\s+/g, ' ')
+      .trim();
+    out.ipoDate = cleaned;
+    out.listingDate = cleaned;
   }
+
+  // 員工人數：Goodinfo 沒直接給，但有「員工平均年薪」(非主管職員工) 可能被誤抓成 11 萬
+  // 我們跳過這欄位（抓不到也不影響）
+  out.employeeCount = undefined;
 
   const capitalText = grab('實收資本額') ?? grab('資本額');
   if (capitalText) {
@@ -164,6 +180,9 @@ function parseCompanyPage(html: string, url: string, raw: string): GoodinfoCompa
       else out.capitalPaidIn = Math.round(million);
     }
   }
+
+  // 統一編號（少見但有就看能不能抓到）
+  out.taxId = grab('統一編號');
 
   // 產業別：用 table-aware regex 抓「產業別」label 後第一個 td 中的值（無論是 text 還是 <a> 內文）
   // 注意：<th> 可能含 <nobr> 等內嵌 tag，用 [\s\S]*? 容許

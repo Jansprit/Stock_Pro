@@ -41,6 +41,7 @@ export interface StockOverview {
   president?: string;
   spokesperson?: string;
   capitalPaidIn?: number;
+  listingDate?: string;
   forwardPE?: number;
   eps?: number;
   beta?: number;
@@ -142,6 +143,8 @@ export interface NewsItem {
 export interface Competitor {
   symbol: string;
   name: string;
+  /** 資料來源標記（'goodinfo' 表示由 Goodinfo 同業自動撈的；seeded 表示預先建表） */
+  source?: string;
   marketCap?: number;
   revenue?: number;
   grossMargin?: number;

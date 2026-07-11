@@ -36,7 +36,6 @@ export async function GET(
   }
 
   // 補充：Goodinfo 同業清單（台股限定），抓 TWSE 產業分類下的所有同業
-  // 注意：不要覆寫 seed 既有項目，僅在 seeds 為空時填入（或補滿）
   let twseIndustry: string | null = null;
   try {
     const isTw = /\.(TW|TWO)$/i.test(symbol);
@@ -45,23 +44,43 @@ export async function GET(
       const result = await fetchGoodinfoPeersForSymbol(symbol, 10);
       twseIndustry = result.twseIndustry;
       console.log(`[competitors] goodinfo: ${symbol} -> ${result.peers.length} peers, industry=${twseIndustry ?? 'none'}`);
-      if (competitors.length === 0 && result.peers.length > 0) {
-        // 完全沒 seed：把 Goodinfo 同業填入（限 5 家），標記 source = goodinfo
-        competitors = result.peers.slice(0, 5).map((p) => ({
-          symbol: p.symbol,
-          name: p.name,
-          marketPosition: `Goodinfo 同類股（${twseIndustry ?? '未分類'}）`,
-          coreStrength: '',
-          coreRisk: '',
-          source: 'goodinfo' as const,
-        }));
-      } else if (result.peers.length > 0 && competitors.length > 0) {
-        // 有 seed：把 twseIndustry 附加資訊附在 aiSummary
-        void twseIndustry;
+
+      // 從 Goodinfo 補 5 家同業（無論有沒有 seed — 填補未完整的）
+      const goodinfoPeers = result.peers
+        .filter((p) => !competitors.find((c) => c.symbol === p.symbol))
+        .slice(0, 5);
+
+      if (goodinfoPeers.length > 0) {
+        // 嘗試補指標：從 Yahoo / Finnhub 抓 price target 與 valuation
+        try {
+          const metrics = await getCompetitorMetrics(goodinfoPeers.map((p) => p.symbol));
+          for (const p of goodinfoPeers) {
+            competitors.push({
+              symbol: p.symbol,
+              name: p.name,
+              marketPosition: `同屬「${twseIndustry ?? '未分類'}」產業（Goodinfo 來源）`,
+              coreStrength: '',
+              coreRisk: '',
+              source: 'goodinfo',
+              ...metrics.get(p.symbol),
+            });
+          }
+        } catch {
+          // fallback：只給基本 symbol + name
+          for (const p of goodinfoPeers) {
+            competitors.push({
+              symbol: p.symbol,
+              name: p.name,
+              marketPosition: `同屬「${twseIndustry ?? '未分類'}」產業（Goodinfo 來源）`,
+              coreStrength: '',
+              coreRisk: '',
+              source: 'goodinfo',
+            });
+          }
+        }
       }
     }
   } catch (err) {
-    // Goodinfo 失敗不影響主流程
     console.warn('[competitors] goodinfo fallback skipped:', err);
   }
 
@@ -76,7 +95,6 @@ export async function GET(
     });
   }
 
-  // aiSummary 由 AI 報告（POST /api/ai-report）補上
   return NextResponse.json<CompetitorData>({
     competitors,
     aiSummary: '',

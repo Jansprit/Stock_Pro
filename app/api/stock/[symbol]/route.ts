@@ -30,11 +30,14 @@ export async function GET(
           if (companyInfo.chairman) overview.chairman = companyInfo.chairman;
           if (companyInfo.twseIndustry) overview.twseIndustry = companyInfo.twseIndustry;
           if (companyInfo.ipoDate) overview.ipoDate = companyInfo.ipoDate;
+          if (companyInfo.listingDate) overview.listingDate = companyInfo.listingDate;
           if (companyInfo.mainProducts) overview.mainProducts = companyInfo.mainProducts;
           if (companyInfo.address) overview.address = companyInfo.address;
           if (companyInfo.employeeCount !== undefined) overview.employeeCount = companyInfo.employeeCount;
+          if (companyInfo.capitalPaidIn !== undefined) overview.capitalPaidIn = companyInfo.capitalPaidIn;
           if (companyInfo.president) overview.president = companyInfo.president;
           if (companyInfo.spokesperson) overview.spokesperson = companyInfo.spokesperson;
+          if (companyInfo.sourceUrl && !overview.website) overview.website = companyInfo.sourceUrl;
         }
       } catch (e) {
         console.warn('[stock] goodinfo fallback skipped:', e instanceof Error ? e.message : e);
