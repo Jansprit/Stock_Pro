@@ -200,6 +200,14 @@ export interface AIGenerationInput {
     eps?: number;
     pe?: number;
     currency: string;
+    // === Goodinfo 補充欄位（v0.3.x） ===
+    twseIndustry?: string;     // TWSE 產業分類
+    chairman?: string;          // 董事長
+    president?: string;         // 總經理
+    mainProducts?: string;      // 主要產品 / 業務範圍
+    address?: string;           // 總部地址
+    ipoDate?: string;           // 上市日期
+    website?: string;           // 官方網站
   };
   financials: {
     years: Array<{
@@ -225,8 +233,17 @@ export interface AIGenerationInput {
   }>;
   competitors: Array<{
     name: string;
-    marketPosition: string;
-    coreStrength: string;
-    coreRisk: string;
+    marketPosition?: string;   // v0.3.x 才會有
+    coreStrength?: string;
+    coreRisk?: string;
+    // === 補充指標（v0.3.x 起，Goodinfo + Yahoo metrics 會帶入）===
+    pe?: number;
+    pb?: number;
+    price?: number;
+    marketCap?: number;
+    grossMargin?: number;
+    netMargin?: number;
+    eps?: number;
+    roe?: number;
   }>;
 }

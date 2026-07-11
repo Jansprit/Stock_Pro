@@ -71,13 +71,40 @@ export const buildMainPrompt = {
       `${i + 1}. [${n.sentiment}/${n.category}] ${n.title}\n   ${n.summary}`
     ).join('\n');
 
-    const competitorsList = input.competitors.map((c, i) =>
-      `${i + 1}. ${c.name}：${c.marketPosition}\n   核心優勢：${c.coreStrength}\n   核心風險：${c.coreRisk}`
-    ).join('\n');
+    // 競爭對手格式：加上 PE / 業務摘要讓 AI 有更完整的比較素材
+    const competitorsList = input.competitors.map((c, i) => {
+      const lines = [`${i + 1}. ${c.name}（${c.marketPosition ?? '同業'}）`];
+      if (c.pe !== undefined) lines.push(`   PE：本益比 ${c.pe.toFixed(1)}`);
+      if (c.pb !== undefined) lines.push(`   PB：股價淨值比 ${c.pb.toFixed(2)}`);
+      if (c.price !== undefined) lines.push(`   即時股價：${c.price.toFixed(2)}`);
+      if (c.grossMargin !== undefined) lines.push(`   毛利率：${c.grossMargin.toFixed(1)}%`);
+      if (c.netMargin !== undefined) lines.push(`   淨利率：${c.netMargin.toFixed(1)}%`);
+      if (c.roe !== undefined) lines.push(`   ROE：${c.roe.toFixed(1)}%`);
+      if (c.marketCap !== undefined) lines.push(`   市值：${formatNum(c.marketCap)}`);
+      if (c.eps !== undefined) lines.push(`   EPS：${c.eps.toFixed(2)}`);
+      return lines.join('\n');
+    }).join('\n');
 
     const financialsTable = f.years.map((y) =>
       `${y.year}年：營收 ${formatNum(y.revenue)}、毛利 ${y.grossMargin.toFixed(1)}%、淨利率 ${y.netMargin.toFixed(1)}%、ROE ${y.roe.toFixed(1)}%、負債比 ${y.debtToEquity.toFixed(1)}%、自由現金流 ${formatNum(y.freeCashFlow)}、EPS ${y.eps.toFixed(2)}`
     ).join('\n');
+
+    // === 從 Goodinfo 來的台股補充欄位組裝 ===
+    const twEnrichmentLines = [];
+    if (o.twseIndustry) twEnrichmentLines.push(`- TWSE 產業分類：${o.twseIndustry}`);
+    if (o.chairman) twEnrichmentLines.push(`- 董事長：${o.chairman}`);
+    if (o.president) twEnrichmentLines.push(`- 總經理：${o.president}`);
+    if (o.ipoDate) twEnrichmentLines.push(`- 上市日期：${o.ipoDate}`);
+    if (o.address) twEnrichmentLines.push(`- 總部地址：${o.address}`);
+    if (o.website) twEnrichmentLines.push(`- 官方網站：${o.website}`);
+    const twEnrichmentBlock = twEnrichmentLines.length > 0
+      ? '\n## 公司治理 / 產業補充（來自 Goodinfo 台股資料庫）\n' + twEnrichmentLines.join('\n')
+      : '';
+
+    // === 主要業務 block（這是 AI 判斷「技術壁壘與客戶黏著度」的關鍵）===
+    const mainProductsBlock = o.mainProducts
+      ? `\n## 主要產品 / 業務範圍（用來判斷核心技術壁壘、客戶黏著度、定價能力）\n${o.mainProducts}\n（如需更深入分析，請參考同產業新聞與競爭對手矩陣再推論）\n`
+      : '';
 
     return `請根據以下資料，生成 ${o.symbol} (${o.name}) 的完整股票研究報告。
 
@@ -86,22 +113,30 @@ export const buildMainPrompt = {
 - 公司名稱：${o.name}
 - 交易所：${o.exchange}
 - 產業：${o.sector ?? '未知'} / ${o.industry ?? '未知'}
+${o.twseIndustry ? `- TWSE 精確產業分類：${o.twseIndustry}` : ''}
 - 現價：${formatNum(o.price)} ${o.currency}
 - 市值：${o.marketCap ? formatNum(o.marketCap) : '未知'}
 - 本益比：${o.pe?.toFixed(2) ?? '未知'}
-- EPS：${o.eps?.toFixed(2) ?? '未知'}
+- EPS：${o.eps?.toFixed(2) ?? '未知'}${twEnrichmentBlock}
 
 ## 公司簡介
-${o.description?.slice(0, 800) ?? '（無資料）'}
+${o.description?.slice(0, 800) ?? '（無描述，但可用「主要產品 / 業務範圍」+ 同業新聞推論公司是做什麼的）'}
+${mainProductsBlock}
 
 ## 財務數據（近 ${f.years.length} 年）
 ${financialsTable || '（無財務資料，常見於 ETF、新上市股、極冷門股）'}
 
 ## 近期新聞（前 10 則）
-${newsList || '（無新聞資料）'}
+${newsList || '（無新聞資料，可參考同產業新聞）'}
 
-## 主要競爭對手
-${competitorsList || '（無競爭對手資料）'}
+## 主要競爭對手（${input.competitors.length} 家）
+${competitorsList || '（無預設競爭對手，可參考同產業（${o.twseIndustry ?? o.industry}）的相關企業）'}
+
+## 重要提示
+1. 你有公司簡介、董事長/總經理/上市日期、主要產品、業務範圍、台股 TWSE 精確產業、新聞與同業矩陣。
+   不要說「資料不足」 — 必須根據現有資訊主動推論，並在 conclusion 標示哪幾項事實較弱。
+2. 同業名稱與指標是用來計算相對競爭力的，必須使用（例如「PE 對標半導體業平均」）。
+3. 新聞是用來分析「短中期影響」與「新聞情緒」評分的。
 
 請輸出完整 JSON 報告。`;
   },

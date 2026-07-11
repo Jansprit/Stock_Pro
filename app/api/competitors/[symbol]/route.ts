@@ -45,38 +45,42 @@ export async function GET(
       twseIndustry = result.twseIndustry;
       console.log(`[competitors] goodinfo: ${symbol} -> ${result.peers.length} peers, industry=${twseIndustry ?? 'none'}`);
 
-      // 從 Goodinfo 補 5 家同業（無論有沒有 seed — 填補未完整的）
+      // 從 Goodinfo 補同業（5 家上限）
       const goodinfoPeers = result.peers
         .filter((p) => !competitors.find((c) => c.symbol === p.symbol))
         .slice(0, 5);
 
       if (goodinfoPeers.length > 0) {
-        // 嘗試補指標：從 Yahoo / Finnhub 抓 price target 與 valuation
+        // 嘗試補 indicators：從 Goodinfo 拿到的 PE 直接用；其他欄位試 Yahoo
+        let metrics: Map<string, Partial<Competitor>> = new Map();
         try {
-          const metrics = await getCompetitorMetrics(goodinfoPeers.map((p) => p.symbol));
-          for (const p of goodinfoPeers) {
-            competitors.push({
-              symbol: p.symbol,
-              name: p.name,
-              marketPosition: `同屬「${twseIndustry ?? '未分類'}」產業（Goodinfo 來源）`,
-              coreStrength: '',
-              coreRisk: '',
-              source: 'goodinfo',
-              ...metrics.get(p.symbol),
-            });
-          }
+          metrics = await getCompetitorMetrics(goodinfoPeers.map((p) => p.symbol));
         } catch {
-          // fallback：只給基本 symbol + name
-          for (const p of goodinfoPeers) {
-            competitors.push({
-              symbol: p.symbol,
-              name: p.name,
-              marketPosition: `同屬「${twseIndustry ?? '未分類'}」產業（Goodinfo 來源）`,
-              coreStrength: '',
-              coreRisk: '',
-              source: 'goodinfo',
-            });
-          }
+          // 忽略，繼續只用 Goodinfo 指標
+        }
+        for (const p of goodinfoPeers) {
+          // 注意：優先用 Goodinfo 的即時 PE / PB / price（Yahoo 對中小股常回空或錯值）
+          const m = metrics.get(p.symbol) ?? ({} as Partial<Competitor>);
+          const peer: Competitor = {
+            symbol: p.symbol,
+            name: p.name,
+            marketPosition: `同屬「${twseIndustry ?? '未分類'}」產業（Goodinfo 來源）`,
+            coreStrength: '',
+            coreRisk: '',
+            source: 'goodinfo',
+            // Goodinfo PE / PB / price 為主要來源（empty 才 fallback Yahoo）
+            pe: p.pe ?? m.pe,
+            pb: p.pb ?? m.pb,
+            price: p.price ?? m.price,
+            // 其他欄位（Yahoo 比較有值）才用 Yahoo fallback
+            ...(m.marketCap !== undefined && { marketCap: m.marketCap }),
+            ...(m.grossMargin !== undefined && { grossMargin: m.grossMargin }),
+            ...(m.netMargin !== undefined && { netMargin: m.netMargin }),
+            ...(m.eps !== undefined && { eps: m.eps }),
+            ...(m.roe !== undefined && { roe: m.roe }),
+            ...(m.dividendYield !== undefined && { dividendYield: m.dividendYield }),
+          };
+          competitors.push(peer);
         }
       }
     }

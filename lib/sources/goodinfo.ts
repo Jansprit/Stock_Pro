@@ -19,7 +19,7 @@
  */
 
 import { cached } from '../cache';
-import { fetchWithPlaywright as _fetchHtml } from './_playwright-scraper';
+import { fetchWithPlaywright as _fetchHtml, fetchAndParsePeerRows as _fetchAndParsePeerRows } from './_playwright-scraper';
 
 /* ============== 型別 ============== */
 
@@ -59,6 +59,42 @@ export interface GoodinfoPeer {
   name: string;
   /** 同業排名（Goodinfo 表內的位置） */
   rank?: number;
+  /** 從 Goodinfo peers table 抓出的即時指標 */
+  price?: number;
+  pe?: number;
+  pb?: number;
+}
+
+/**
+ * 從 Goodinfo peers HTML 抓取 table header（用來對齊 cell index → column name）
+ *
+ * HTML 結構：<thead>...<th>代號</th><th>名稱</th>...<th>PER</th><th>PBR</th></thead>
+ * 但 Goodinfo 用 colspan 結構複雜，這裡簡化：找第一個含「代號」th 起算到 「10年走勢圖」止所有 th。
+ */
+export function extractPeersHeader(html: string): string[] {
+  // 找 main table（從 sidebar end 後開始）
+  const sidebarEnd = html.indexOf('個股概況</a>');
+  const mainHtml = sidebarEnd > 0 ? html.substring(sidebarEnd) : html;
+  // 找 thead → 內含 PER/PBR 那一段
+  const theadRe = /<thead[\s\S]*?<\/thead>/gi;
+  const headers: string[] = [];
+  let tm;
+  const seen = new Set<string>();
+  while ((tm = theadRe.exec(mainHtml)) !== null) {
+    const inner = tm[0];
+    const thRe = /<th[^>]*>([\s\S]*?)<\/th>/gi;
+    let thm;
+    while ((thm = thRe.exec(inner)) !== null) {
+      const h = stripTags(thm[1]).trim();
+      if (h && !seen.has(h)) {
+        seen.add(h);
+        headers.push(h);
+      }
+    }
+    // 取到第一個完整 thead（含 PER、PBR）就停
+    if (headers.includes('PER') || headers.includes('pe')) break;
+  }
+  return headers;
 }
 
 export interface GoodinfoNewsItem {
@@ -211,7 +247,7 @@ export async function fetchGoodinfoPeersByIndustry(
   market: '上市' | '上櫃' | '全部' = '全部',
 ): Promise<GoodinfoPeerCache> {
   return cached(
-    `goodinfo:peers:${industryName}:${market}`,
+    `goodinfo:peers:v3:${industryName}:${market}`,  // ← bump v3: force fresh Playwright DOM extraction after server restart
     12 * 60 * 60 * 1000,
     async () => {
       const params = new URLSearchParams({
@@ -226,7 +262,23 @@ export async function fetchGoodinfoPeersByIndustry(
           Referer: 'https://goodinfo.tw/',
         },
       });
-      const peers = parsePeersTable(html, industryName);
+      // 用 Playwright 重新開瀏覽器抓 peer row（更可靠 — 含 PE/PB/price）
+      const peerRows = await _fetchAndParsePeerRows(url);
+      const peers: GoodinfoPeer[] = [];
+      let rank = 1;
+      for (const row of peerRows) {
+        if (/(個股概況|基本概況|技術分析|籌碼分析|股東資訊|財報|財務報表|每月營收|產品營收|其他)/.test(row.name)) continue;
+        if (row.name.length < 2 || row.name.length > 10) continue;
+        peers.push({
+          rawSymbol: row.rawSymbol,
+          symbol: `${row.rawSymbol}.TW`,
+          name: row.name,
+          rank: rank++,
+          price: row.price,
+          pe: row.pe,
+          pb: row.pb,
+        });
+      }
       return { twseIndustry: industryName, peers, fetchedAt: new Date().toISOString() };
     },
   );
@@ -264,7 +316,7 @@ export async function fetchGoodinfoPeersForSymbol(
  *
  * 我們用寬鬆 regex 抓「4-6 位數字代號」+ 「中文公司名」。
  */
-export function parsePeersTable(html: string, _industry: string): GoodinfoPeer[] {
+export function parsePeersTable(html: string, _industry: string, headers: string[] = []): GoodinfoPeer[] {
   const out: GoodinfoPeer[] = [];
   const seen = new Set<string>();
 
@@ -277,6 +329,8 @@ export function parsePeersTable(html: string, _industry: string): GoodinfoPeer[]
   const mainHtml = sidebarEnd > 0 ? html.substring(sidebarEnd) : html;
 
   // 嘗試 1：StockDetail.asp?STOCK_ID=XXXX + 之後 anchor 文字
+  // 同時順著 row 走，把每個 cell 抓下來：col0=排名, col1=代碼, col2=名稱,
+  // 之後第 PER/PBR 在哪一列要依 header 動態決定 → 先抓所有 cell 列表
   const re1 = /StockDetail\.asp\?STOCK_ID=(\d{4,6})(?:[^>]*>)([\s\S]*?)<\/a>/g;
   let m: RegExpExecArray | null;
   while ((m = re1.exec(mainHtml)) !== null) {
@@ -285,13 +339,52 @@ export function parsePeersTable(html: string, _industry: string): GoodinfoPeer[]
     if (!nameMatch) continue;
     const name = nameMatch[0].trim();
     if (name.length < 2 || name.length > 10) continue;
-    // 排除 sidebar 與 section header 字眼
     if (/(個股概況|基本概況|技術分析|籌碼分析|股東資訊|財報|財務報表|每月營收|產品營收|其他)/.test(name)) {
       continue;
     }
     if (seen.has(code)) continue;
     seen.add(code);
-    out.push({ rawSymbol: code, symbol: `${code}.TW`, name, rank: out.length + 1 });
+
+    // 從 stock code 的位置往後找最近的一個 </tr>，抓這 row 內所有 <td>
+    // row 從 anchor 後第一個 <tr> 起算（避免抓到前一個 row 殘留或 sidebar）
+    const codeIdx = m.index;
+    const rowStart = mainHtml.indexOf('<tr', codeIdx);
+    const rowEnd = mainHtml.indexOf('</tr>', codeIdx);
+    const peersRow: { pe?: number; pb?: number; price?: number } = {};
+    if (rowEnd > rowStart && rowStart >= 0) {
+      const rowHtml = mainHtml.substring(rowStart, rowEnd);
+      // 直接從 row HTML 抓 PER / PBR 連結的值（這些 anchor 用 RPT_CAT 區分）
+      // 例：<a class="link_black" href="...&RPT_CAT=PER&...">32.5</a>
+      const peMatch = rowHtml.match(/RPT_CAT=PER[^>]*>([0-9.]+)</i)
+        ?? rowHtml.match(/RPT_CAT=PER[^>]*>([\s\S]*?)<\/a>/);
+      const pbMatch = rowHtml.match(/RPT_CAT=PBR[^>]*>([0-9.]+)</i)
+        ?? rowHtml.match(/RPT_CAT=PBR[^>]*>([\s\S]*?)<\/a>/);
+      // 取即時股價（成交 column 的 anchor 內容，e.g. "2415"）
+      // 此行第一個 nonzero 正股價通常在 cells[5]（成交）
+      // 改從 cell text 抓
+      const cellRe = /<td[^>]*>([\s\S]*?)<\/td>/g;
+      const cells: string[] = [];
+      let cm;
+      while ((cm = cellRe.exec(rowHtml)) !== null) {
+        cells.push(stripTags(cm[1]).trim());
+      }
+      // cells[5] = 成交價格（ex: 2415 或 70.1）
+      const priceText = cells[5] ?? '';
+      const peFromAnchor = peMatch ? parseFloat((peMatch[1] ?? '').replace(/[,+]/g, '')) : NaN;
+      const pbFromAnchor = pbMatch ? parseFloat((pbMatch[1] ?? '').replace(/[,+]/g, '')) : NaN;
+      const priceFromCell = parseFloat(priceText.replace(/[,+]/g, ''));
+      if (Number.isFinite(peFromAnchor)) peersRow.pe = peFromAnchor;
+      if (Number.isFinite(pbFromAnchor)) peersRow.pb = pbFromAnchor;
+      if (Number.isFinite(priceFromCell) && priceFromCell > 0) peersRow.price = priceFromCell;
+    }
+
+    out.push({
+      rawSymbol: code,
+      symbol: `${code}.TW`,
+      name,
+      rank: out.length + 1,
+      ...peersRow,
+    });
   }
 
   // 嘗試 2：fallback — tr 行內 4 碼數字 + 中文科

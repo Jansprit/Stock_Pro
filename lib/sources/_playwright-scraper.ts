@@ -98,3 +98,103 @@ export async function shutdownBrowser(): Promise<void> {
     browserPromise = null;
   }
 }
+
+/**
+ * 用 Playwright 訪問 peers URL 抓每 row 的 cells
+ *
+ * 注意：規則比較嚴，每 row 必須符合：
+ *   - 至少有 17 個 td (固定欄位)
+ *   - 第一 td 含 StockDetail.asp link
+ */
+export async function fetchAndParsePeerRows(
+  url: string,
+  options: { timeout?: number } = {},
+): Promise<Array<{
+  rawSymbol: string;
+  name: string;
+  pe?: number;
+  pb?: number;
+  price?: number;
+  cells: string[];
+}>> {
+  const { timeout = 60_000 } = options;
+  const browser = await getBrowser();
+  const ctx = await browser.newContext({
+    viewport: { width: 1280, height: 800 },
+    locale: 'zh-TW',
+    ignoreHTTPSErrors: true,
+    extraHTTPHeaders: { 'Accept-Language': 'zh-TW,zh;q=0.9,en;q=0.8' },
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  });
+  try {
+    const page = await ctx.newPage();
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout });
+    try { await page.waitForLoadState('networkidle', { timeout: 15000 }); } catch { /* ignore */ }
+    await page.waitForTimeout(2000);
+
+    return await page.evaluate(() => {
+      const out = [];
+      const seen = new Set();
+      // 找含「代號」「名稱」表頭的 table
+      const tables = Array.from(document.querySelectorAll('table'));
+      for (const t of tables) {
+        const headers = Array.from(t.querySelectorAll('th')).map(h => h.textContent.trim());
+        if (!(headers.includes('代號') && headers.includes('名稱'))) continue;
+        // 找含 StockDetail link 的 tr
+        const links = t.querySelectorAll('a[href*="STOCK_ID="]');
+        for (const link of links) {
+          const href = link.getAttribute('href') || '';
+          const m = href.match(/STOCK_ID=(\d{4,6})/);
+          if (!m) continue;
+          // Dedup by rawSymbol（同一頁面 sidebar/header/main table 都會有同一個 anchor）
+          if (seen.has(m[1])) continue;
+          const tr = link.closest('tr');
+          if (!tr) continue;
+          const tds = tr.querySelectorAll('td');
+          if (tds.length < 10) continue; // 跳過 sidebar row
+          seen.add(m[1]);
+          const cells: string[] = [];
+          tds.forEach(td => cells.push(td.textContent.trim().replace(/\s+/g, ' ')));
+          // 抓 PER / PBR 從 RPT_CAT=PER/PBR 的 anchor
+          let pe, pb, price;
+          for (const td of tds) {
+            // 找 RPT_CAT=PER 的 anchor
+            const perAnchor = Array.from(td.querySelectorAll('a')).find(a => /RPT_CAT=PER/i.test(a.getAttribute('href') || ''));
+            if (perAnchor) {
+              const text = (perAnchor.textContent || '').replace(/[,+\s]/g, '');
+              const n = parseFloat(text);
+              if (!isNaN(n) && n > 0) pe = n;
+            }
+            const pbAnchor = Array.from(td.querySelectorAll('a')).find(a => /RPT_CAT=PBR/i.test(a.getAttribute('href') || ''));
+            if (pbAnchor) {
+              const text = (pbAnchor.textContent || '').replace(/[,+\s]/g, '');
+              const n = parseFloat(text);
+              if (!isNaN(n) && n > 0) pb = n;
+            }
+            // 即時價格：找 ShowK_Chart 的 anchor（cells[5] 的鏈結）
+            const priceAnchor = Array.from(td.querySelectorAll('a')).find(a => /ShowK_Chart\.asp\?STOCK_ID=/.test(a.getAttribute('href') || '') && /CHT_CAT=DATE/.test(a.getAttribute('href') || ''));
+            if (priceAnchor) {
+              const text = (priceAnchor.textContent || '').replace(/[,+\s]/g, '');
+              const n = parseFloat(text);
+              if (!isNaN(n) && n > 0) price = n;
+            }
+          }
+          out.push({
+            rawSymbol: m[1],
+            name: cells[1] || '',  // cells[1] = 名稱
+            pe, pb, price,
+            cells,
+          });
+        }
+        if (out.length > 0) {
+          // 印出前 3 筆供 debug
+          console.log(`[parsePeers] ${out.length} rows from DOM, sample:`, out.slice(0, 3).map(o => `${o.rawSymbol}:pe=${o.pe},pb=${o.pb},price=${o.price}`).join(' | '));
+        }
+        return out;
+      }
+      return [];
+    });
+  } finally {
+    await ctx.close();
+  }
+}

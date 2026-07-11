@@ -151,9 +151,11 @@ export interface Competitor {
   netMargin?: number;
   eps?: number;
   pe?: number;
+  pb?: number;
   ps?: number;
   evEbitda?: number;
   roe?: number;
+  price?: number;
   dividendYield?: number;
   growthRate?: number;
   fiftyTwoWeekHigh?: number;
