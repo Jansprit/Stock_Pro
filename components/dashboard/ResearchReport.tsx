@@ -38,9 +38,9 @@ export function ResearchReport({ report, stockName, defaultExpanded = false }: R
           type="button"
           onClick={() => setExpanded((v) => !v)}
           className="
-            inline-flex items-center gap-1 rounded-md border border-slate-700
-            bg-slate-800/60 px-2.5 py-1 text-xs text-slate-300
-            transition-colors hover:bg-slate-700 hover:text-slate-100
+            inline-flex items-center gap-1 rounded-md border border-edge bg-card
+            px-2.5 py-1 text-xs text-fg-muted transition-colors
+            hover:bg-hover hover:text-fg
           "
         >
           {expanded ? '收起' : '展開'}
@@ -49,9 +49,9 @@ export function ResearchReport({ report, stockName, defaultExpanded = false }: R
       }
     >
       {!expanded ? (
-        <div className="text-sm text-slate-400">
+        <div className="text-sm text-fg-muted">
           <p>{report.summary}</p>
-          <p className="mt-2 text-xs text-slate-500">
+          <p className="mt-2 text-xs text-fg-subtle">
             點擊「展開」查看完整的財務分析、競爭分析、新聞影響與公司優勢列表。
           </p>
         </div>
@@ -59,19 +59,19 @@ export function ResearchReport({ report, stockName, defaultExpanded = false }: R
         <div className="space-y-6">
           {sections.map((s) => (
             <section key={s.title} data-pdf-block="research-chapter">
-              <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-100">
+              <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-fg">
                 <span className="h-1 w-1 rounded-full bg-brand-500" />
                 {s.title}
               </h4>
               {s.content && (
-                <p className="text-sm leading-relaxed text-slate-300">{s.content}</p>
+                <p className="text-sm leading-relaxed text-fg">{s.content}</p>
               )}
               {s.list && (
                 <ul className="space-y-2.5">
                   {s.list.map((item, idx) => (
-                    <li key={idx} className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
-                      <div className="text-sm font-semibold text-slate-100">{item.title}</div>
-                      <div className="mt-1 text-xs leading-relaxed text-slate-400">{item.description}</div>
+                    <li key={idx} className="rounded-md border border-edge bg-sunken p-3">
+                      <div className="text-sm font-semibold text-fg">{item.title}</div>
+                      <div className="mt-1 text-xs leading-relaxed text-fg-muted">{item.description}</div>
                     </li>
                   ))}
                 </ul>
@@ -81,15 +81,15 @@ export function ResearchReport({ report, stockName, defaultExpanded = false }: R
 
           {/* 評分解釋 */}
           <section>
-            <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-100">
+            <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-fg">
               <span className="h-1 w-1 rounded-full bg-brand-500" />
               AI 評分依據
             </h4>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {Object.entries(report.scoreReasons).map(([key, reason]) => (
-                <div key={key} className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
-                  <div className="text-xs font-semibold text-brand-400">{translateScoreKey(key)}</div>
-                  <div className="mt-1 text-xs leading-relaxed text-slate-400">{reason}</div>
+                <div key={key} className="rounded-md border border-edge bg-sunken p-3">
+                  <div className="text-xs font-semibold text-brand-500 dark:text-brand-400">{translateScoreKey(key)}</div>
+                  <div className="mt-1 text-xs leading-relaxed text-fg-muted">{reason}</div>
                 </div>
               ))}
             </div>

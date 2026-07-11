@@ -95,15 +95,15 @@ export function FinancialCharts({ overview, years, loading, error }: FinancialCh
 
         {/* 毛利率 + 淨利率 */}
         <Card padding="sm">
-          <h4 className="mb-2 text-sm font-semibold text-slate-200">毛利率 vs 淨利率</h4>
+          <h4 className="mb-2 text-sm font-semibold text-fg">毛利率 vs 淨利率</h4>
           <div className="h-44 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={marginData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                <XAxis dataKey="year" stroke="#64748b" tick={{ fontSize: 11 }} />
-                <YAxis stroke="#64748b" tick={{ fontSize: 11 }} tickFormatter={(v) => `${v.toFixed(0)}%`} width={45} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
+                <XAxis dataKey="year" stroke="var(--ink-tertiary)" tick={{ fontSize: 11 }} />
+                <YAxis stroke="var(--ink-tertiary)" tick={{ fontSize: 11 }} tickFormatter={(v) => `${v.toFixed(0)}%`} width={45} />
                 <Tooltip
-                  contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
+                  contentStyle={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12, color: 'var(--ink-primary)' }}
                   formatter={(v: number, name: string) => [`${v.toFixed(2)}%`, name === 'value' ? '毛利率' : '淨利率']}
                 />
                 <Line type="monotone" dataKey="value" name="毛利率" stroke="#f59e0b" strokeWidth={2} dot={{ fill: '#f59e0b', r: 3 }} isAnimationActive={false} />
@@ -115,18 +115,18 @@ export function FinancialCharts({ overview, years, loading, error }: FinancialCh
 
         {/* 現金流 */}
         <Card padding="sm" className="lg:col-span-2">
-          <h4 className="mb-2 text-sm font-semibold text-slate-200">現金流變化（營運現金流 vs 自由現金流）</h4>
+          <h4 className="mb-2 text-sm font-semibold text-fg">現金流變化（營運現金流 vs 自由現金流）</h4>
           <div className="h-48 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={cashflowData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                <XAxis dataKey="year" stroke="#64748b" tick={{ fontSize: 11 }} />
-                <YAxis stroke="#64748b" tick={{ fontSize: 11 }} tickFormatter={(v) => formatCurrency(v, overview.currency)} width={70} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
+                <XAxis dataKey="year" stroke="var(--ink-tertiary)" tick={{ fontSize: 11 }} />
+                <YAxis stroke="var(--ink-tertiary)" tick={{ fontSize: 11 }} tickFormatter={(v) => formatCurrency(v, overview.currency)} width={70} />
                 <Tooltip
-                  contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
+                  contentStyle={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12, color: 'var(--ink-primary)' }}
                   formatter={(v: number, name: string) => [formatCurrency(v, overview.currency), name === 'operating' ? '營運現金流' : '自由現金流']}
                 />
-                <ReferenceLine y={0} stroke="#475569" />
+                <ReferenceLine y={0} stroke="var(--border-strong)" />
                 <Bar dataKey="operating" name="operating" fill="#3b82f6" radius={[4, 4, 0, 0]} isAnimationActive={false}>
                   {cashflowData.map((entry, idx) => (
                     <Cell key={idx} fill={entry.operating >= 0 ? '#3b82f6' : '#ef4444'} />
@@ -158,23 +158,23 @@ function ChartBox({ title, data, color, format, currency }: ChartBoxProps) {
   const hasNegative = data.some((d) => d.value < 0);
   return (
     <Card padding="sm">
-      <h4 className="mb-2 text-sm font-semibold text-slate-200">{title}</h4>
+      <h4 className="mb-2 text-sm font-semibold text-fg">{title}</h4>
       <div className="h-44 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-            <XAxis dataKey="year" stroke="#64748b" tick={{ fontSize: 11 }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
+            <XAxis dataKey="year" stroke="var(--ink-tertiary)" tick={{ fontSize: 11 }} />
             <YAxis
-              stroke="#64748b"
+              stroke="var(--ink-tertiary)"
               tick={{ fontSize: 11 }}
               tickFormatter={(v) => format === 'currency' ? formatCurrency(v, currency) : v.toFixed(2)}
               width={70}
             />
             <Tooltip
-              contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
+              contentStyle={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12, color: 'var(--ink-primary)' }}
               formatter={(v: number) => [format === 'currency' ? formatCurrency(v, currency) : v.toFixed(2), title]}
             />
-            {hasNegative && <ReferenceLine y={0} stroke="#475569" />}
+            {hasNegative && <ReferenceLine y={0} stroke="var(--border-strong)" />}
             <Bar dataKey="value" radius={[4, 4, 0, 0]} isAnimationActive={false}>
               {data.map((entry, idx) => (
                 <Cell key={idx} fill={entry.value >= 0 ? color : '#ef4444'} />

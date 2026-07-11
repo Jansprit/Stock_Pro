@@ -86,7 +86,7 @@ export function FinancialTable({ overview, years, loading, error }: FinancialTab
       subtitle={`近 ${sortedYears.length} 年（${oldest?.year ?? ''} ~ ${sortedYears[0]?.year}）`}
     >
       {/* Tabs */}
-      <div className="no-print-tab mb-4 flex gap-2 border-b border-slate-800">
+      <div className="no-print-tab mb-4 flex gap-2 border-b border-edge">
         {TABS.map((t) => (
           <button
             key={t.key}
@@ -94,7 +94,7 @@ export function FinancialTable({ overview, years, loading, error }: FinancialTab
             onClick={() => setTab(t.key)}
             className={`
               relative px-3 py-2 text-sm font-medium transition-colors
-              ${tab === t.key ? 'text-brand-400' : 'text-slate-400 hover:text-slate-200'}
+              ${tab === t.key ? 'text-brand-500 dark:text-brand-400' : 'text-fg-muted hover:text-fg'}
             `}
           >
             {t.label}
@@ -109,7 +109,7 @@ export function FinancialTable({ overview, years, loading, error }: FinancialTab
         {tab === 'profitability' && (
           <table className="w-full min-w-[640px] text-sm">
             <thead>
-              <tr className="border-b border-slate-800 text-left text-xs text-slate-500">
+              <tr className="border-b border-edge text-left text-xs text-fg-subtle">
                 <th className="py-2 pr-4 font-medium">指標</th>
                 {sortedYears.map((y) => (
                   <th key={y.year} className="px-3 py-2 text-right font-medium">{y.year}</th>
@@ -134,7 +134,7 @@ export function FinancialTable({ overview, years, loading, error }: FinancialTab
         {tab === 'growth' && (
           <table className="w-full min-w-[640px] text-sm">
             <thead>
-              <tr className="border-b border-slate-800 text-left text-xs text-slate-500">
+              <tr className="border-b border-edge text-left text-xs text-fg-subtle">
                 <th className="py-2 pr-4 font-medium">成長指標</th>
                 {sortedYears.map((y) => (
                   <th key={y.year} className="px-3 py-2 text-right font-medium">{y.year}</th>
@@ -142,24 +142,12 @@ export function FinancialTable({ overview, years, loading, error }: FinancialTab
               </tr>
             </thead>
             <tbody data-pdf-block="financial-rows-growth">
-              <Row
-                label="營收 YoY"
-                cells={growthRows.map((g) => formatPercent(g.revenue, 2, true))}
-                colored
-              />
-              <Row
-                label="淨利 YoY"
-                cells={growthRows.map((g) => formatPercent(g.netIncome, 2, true))}
-                colored
-              />
-              <Row
-                label="EPS YoY"
-                cells={growthRows.map((g) => formatPercent(g.eps, 2, true))}
-                colored
-              />
-              <tr className="border-t border-slate-800">
-                <td colSpan={sortedYears.length + 1} className="pt-3 text-xs text-slate-500">
-                  <span className="font-medium text-slate-300">AI 觀察：</span>
+              <Row label="營收 YoY" cells={growthRows.map((g) => formatPercent(g.revenue, 2, true))} colored />
+              <Row label="淨利 YoY" cells={growthRows.map((g) => formatPercent(g.netIncome, 2, true))} colored />
+              <Row label="EPS YoY" cells={growthRows.map((g) => formatPercent(g.eps, 2, true))} colored />
+              <tr className="border-t border-edge">
+                <td colSpan={sortedYears.length + 1} className="pt-3 text-xs text-fg-muted">
+                  <span className="font-medium text-fg">AI 觀察：</span>
                   {analyzeGrowth(years)}
                 </td>
               </tr>
@@ -170,7 +158,7 @@ export function FinancialTable({ overview, years, loading, error }: FinancialTab
         {tab === 'safety' && (
           <table className="w-full min-w-[640px] text-sm">
             <thead>
-              <tr className="border-b border-slate-800 text-left text-xs text-slate-500">
+              <tr className="border-b border-edge text-left text-xs text-fg-subtle">
                 <th className="py-2 pr-4 font-medium">指標</th>
                 {sortedYears.map((y) => (
                   <th key={y.year} className="px-3 py-2 text-right font-medium">{y.year}</th>
@@ -187,9 +175,9 @@ export function FinancialTable({ overview, years, loading, error }: FinancialTab
               {sortedYears[0]?.currentRatio !== undefined && (
                 <Row label="流動比" cells={sortedYears.map((y) => y.currentRatio?.toFixed(2) ?? 'N/A')} />
               )}
-              <tr className="border-t border-slate-800">
-                <td colSpan={sortedYears.length + 1} className="pt-3 text-xs text-slate-500">
-                  <span className="font-medium text-slate-300">AI 觀察：</span>
+              <tr className="border-t border-edge">
+                <td colSpan={sortedYears.length + 1} className="pt-3 text-xs text-fg-muted">
+                  <span className="font-medium text-fg">AI 觀察：</span>
                   {analyzeSafety(years)}
                 </td>
               </tr>
@@ -212,22 +200,22 @@ interface RowProps {
 
 function Row({ label, cells, highlight, positive, warning, colored }: RowProps) {
   return (
-    <tr className={`border-b border-slate-800/50 ${highlight ? 'bg-slate-800/30' : ''}`}>
-      <td className="py-2 pr-4 text-slate-400">{label}</td>
+    <tr className={`border-b border-edge/50 ${highlight ? 'bg-sunken' : ''}`}>
+      <td className="py-2 pr-4 text-fg-muted">{label}</td>
       {cells.map((c, idx) => {
-        let cls = 'text-slate-100';
+        let cls = 'text-fg';
         if (colored) {
           const num = parseFloat(c.replace(/[^-\d.]/g, ''));
           cls = valueColorClass(num);
         }
         if (positive && (c.includes('%'))) {
           const num = parseFloat(c);
-          if (num > 30) cls = 'text-bull-400';
+          if (num > 30) cls = 'text-bull-500 dark:text-bull-400';
         }
         if (warning) {
           const num = parseFloat(c);
-          if (num > 100) cls = 'text-bear-400';
-          else if (num > 60) cls = 'text-amber-400';
+          if (num > 100) cls = 'text-bear-500 dark:text-bear-400';
+          else if (num > 60) cls = 'text-amber-500 dark:text-amber-400';
         }
         return (
           <td key={idx} className={`px-3 py-2 text-right font-mono text-sm font-medium ${cls}`}>

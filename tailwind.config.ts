@@ -1,7 +1,6 @@
 import type { Config } from 'tailwindcss';
 
 const config: Config = {
-  // 啟用 class 模式切換 dark：<html class="dark">
   darkMode: 'class',
   content: [
     './app/**/*.{ts,tsx}',
@@ -10,14 +9,13 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // 金融主題色彩
-        // light 模式用深色（列印友善），dark 模式用 OLED 對比佳的亮色
+        // 金融主題色彩（兩模式用同樣飽和度，靠 Tailwind dark: 變體在 CSS 覆寫）
         bull: {
           50: '#ecfdf5',
           100: '#d1fae5',
           400: '#34d399',
           500: '#10b981',
-          600: '#059669',  // light 主要色（深綠，列印清晰）
+          600: '#059669',
           700: '#047857',
         },
         bear: {
@@ -25,7 +23,7 @@ const config: Config = {
           100: '#fee2e2',
           400: '#f87171',
           500: '#ef4444',
-          600: '#dc2626',  // light 主要色（深紅，列印清晰）
+          600: '#dc2626',
           700: '#b91c1c',
         },
         brand: {
@@ -34,25 +32,22 @@ const config: Config = {
           400: '#60a5fa',
           500: '#3b82f6',
           600: '#2563eb',
-          700: '#1d4ed8',  // light 主要色（深藍，列印清晰）
+          700: '#1d4ed8',
         },
-        // 主題色：light = paper white，dark = OLED 純黑（省電 + 護眼）
-        surface: {
-          // 頁面背景
-          DEFAULT: '#f8fafc',  // light: paper-50
-          raised: '#ffffff',    // light: card 背景
-          sunken: '#f1f5f9',   // light: nested card
+        // 主題色（Tailwind 主動生成的 utility，dark: 自動接管）
+        app: 'var(--surface-page)',
+        card: 'var(--surface-card)',
+        sunken: 'var(--surface-sunken)',
+        hover: 'var(--surface-hover)',
+        // 文字與邊框（純 Token）
+        fg: {
+          DEFAULT: 'var(--ink-primary)',
+          muted: 'var(--ink-secondary)',
+          subtle: 'var(--ink-tertiary)',
         },
-        ink: {
-          // 文字
-          primary: '#0f172a',    // light: slate-900
-          secondary: '#475569',  // light: slate-600
-          tertiary: '#94a3b8',   // light: slate-400
-          inverse: '#f1f5f9',    // dark 主要文字
-        },
-        border: {
-          DEFAULT: '#e2e8f0',    // light: slate-200
-          strong: '#cbd5e1',     // light: slate-300
+        edge: {
+          DEFAULT: 'var(--border-default)',
+          strong: 'var(--border-strong)',
         },
       },
       fontFamily: {

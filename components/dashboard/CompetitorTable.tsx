@@ -52,7 +52,7 @@ export function CompetitorTable({ data, baseSymbol, loading, error, aiSummaryLoa
       <div className="overflow-x-auto">
         <table className="w-full min-w-[800px] text-sm">
           <thead>
-            <tr className="border-b border-slate-800 text-left text-xs text-slate-500">
+            <tr className="border-b border-edge text-left text-xs text-fg-subtle">
               <th className="py-2 pr-3 font-medium">公司</th>
               <th className="px-3 py-2 text-right font-medium">市值</th>
               <th className="px-3 py-2 text-right font-medium">毛利率</th>
@@ -65,12 +65,12 @@ export function CompetitorTable({ data, baseSymbol, loading, error, aiSummaryLoa
           </thead>
           <tbody data-pdf-block="competitors-rows">
             {data.competitors.map((c) => (
-              <tr key={c.symbol} data-pdf-block="competitor-row" className="border-b border-slate-800/50 transition-colors hover:bg-slate-800/30">
+              <tr key={c.symbol} data-pdf-block="competitor-row" className="border-b border-edge/50 transition-colors hover:bg-hover">
                 <td className="py-3 pr-3">
-                  <div className="font-mono text-sm font-semibold text-slate-100">{c.symbol}</div>
-                  <div className="text-xs text-slate-500">{c.name}</div>
+                  <div className="font-mono text-sm font-semibold text-fg">{c.symbol}</div>
+                  <div className="text-xs text-fg-subtle">{c.name}</div>
                 </td>
-                <td className="px-3 py-3 text-right font-mono text-slate-300">
+                <td className="px-3 py-3 text-right font-mono text-fg-muted">
                   {c.marketCap ? formatCurrency(c.marketCap) : '—'}
                 </td>
                 <td className={`px-3 py-3 text-right font-mono ${scoreColor(c.grossMargin, 30, 50)}`}>
@@ -79,22 +79,22 @@ export function CompetitorTable({ data, baseSymbol, loading, error, aiSummaryLoa
                 <td className={`px-3 py-3 text-right font-mono ${scoreColor(c.netMargin, 10, 20)}`}>
                   {c.netMargin !== undefined ? formatPercent(c.netMargin, 1) : '—'}
                 </td>
-                <td className="px-3 py-3 text-right font-mono text-slate-300">
+                <td className="px-3 py-3 text-right font-mono text-fg-muted">
                   {c.eps !== undefined ? c.eps.toFixed(2) : '—'}
                 </td>
-                <td className="px-3 py-3 text-right font-mono text-slate-300">
+                <td className="px-3 py-3 text-right font-mono text-fg-muted">
                   {c.pe !== undefined ? c.pe.toFixed(1) : '—'}
                 </td>
                 <td className={`px-3 py-3 text-right font-mono ${scoreColor(c.roe, 10, 20)}`}>
                   {c.roe !== undefined ? formatPercent(c.roe, 1) : '—'}
                 </td>
-                <td className="px-3 py-3 text-xs text-slate-400">
+                <td className="px-3 py-3 text-xs text-fg-muted">
                   <div>{c.marketPosition}</div>
-                  <div className="mt-0.5 text-slate-500">
-                    <span className="text-bull-400">+</span> {c.coreStrength}
+                  <div className="mt-0.5 text-fg-subtle">
+                    <span className="text-bull-500 dark:text-bull-400">+</span> {c.coreStrength}
                   </div>
-                  <div className="text-slate-500">
-                    <span className="text-bear-400">−</span> {c.coreRisk}
+                  <div className="text-fg-subtle">
+                    <span className="text-bear-500 dark:text-bear-400">−</span> {c.coreRisk}
                   </div>
                 </td>
               </tr>
@@ -104,23 +104,23 @@ export function CompetitorTable({ data, baseSymbol, loading, error, aiSummaryLoa
       </div>
 
       {data.aiSummary ? (
-        <div className="mt-4 rounded-lg border border-brand-500/20 bg-brand-500/5 p-4">
-          <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-brand-400">
+        <div className="mt-4 rounded-lg border border-brand-500/30 bg-brand-500/5 p-4">
+          <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-brand-600 dark:text-brand-400">
             <TrendingUp className="h-4 w-4" />
             AI 總結
           </div>
-          <p className="text-sm leading-relaxed text-slate-300">{data.aiSummary}</p>
+          <p className="text-sm leading-relaxed text-fg">{data.aiSummary}</p>
         </div>
       ) : aiSummaryLoading ? (
-        <div className="ai-summary-loading mt-4 rounded-lg border border-brand-500/20 bg-brand-500/5 p-4">
-          <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-brand-400">
+        <div className="ai-summary-loading mt-4 rounded-lg border border-brand-500/30 bg-brand-500/5 p-4">
+          <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-brand-600 dark:text-brand-400">
             <TrendingUp className="h-4 w-4 animate-pulse" />
             AI 總結生成中
           </div>
           <div className="ai-summary-loading-bar">
             <div className="ai-summary-loading-bar-fill" />
           </div>
-          <p className="mt-1.5 text-xs text-slate-400">正在分析同業相對優劣…</p>
+          <p className="mt-1.5 text-xs text-fg-muted">正在分析同業相對優劣…</p>
         </div>
       ) : null}
     </Card>
@@ -129,8 +129,8 @@ export function CompetitorTable({ data, baseSymbol, loading, error, aiSummaryLoa
 
 /** 高於 high 用 bull，低於 low 用 bear */
 function scoreColor(value: number | undefined, low: number, high: number): string {
-  if (value === undefined) return 'text-slate-500';
-  if (value >= high) return 'text-bull-400';
-  if (value <= low) return 'text-bear-400';
-  return 'text-slate-300';
+  if (value === undefined) return 'text-fg-subtle';
+  if (value >= high) return 'text-bull-500 dark:text-bull-400';
+  if (value <= low) return 'text-bear-500 dark:text-bear-400';
+  return 'text-fg-muted';
 }

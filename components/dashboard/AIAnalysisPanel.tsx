@@ -42,24 +42,24 @@ export function AIAnalysisPanel({ report, stockName }: AIAnalysisPanelProps) {
       </div>
 
       {/* 公司摘要 */}
-      <div className="mt-6 rounded-lg border border-slate-800 bg-slate-900/50 p-4">
-        <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-200">
-          <Target className="h-4 w-4 text-brand-400" />
+      <div className="mt-6 rounded-lg border border-edge bg-sunken p-4">
+        <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-fg">
+          <Target className="h-4 w-4 text-brand-500 dark:text-brand-400" />
           公司摘要
         </div>
-        <p className="text-sm leading-relaxed text-slate-300">{report.summary}</p>
+        <p className="text-sm leading-relaxed text-fg">{report.summary}</p>
       </div>
 
       {/* 投資亮點 */}
       <div className="mt-4">
-        <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-200">
-          <CheckCircle2 className="h-4 w-4 text-bull-400" />
+        <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-fg">
+          <CheckCircle2 className="h-4 w-4 text-bull-500 dark:text-bull-400" />
           投資亮點
         </div>
         <ul className="space-y-1.5">
           {report.highlights.map((h, idx) => (
-            <li key={idx} className="flex items-start gap-2 text-sm text-slate-300">
-              <span className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-bull-500/20 text-xs font-bold text-bull-400">
+            <li key={idx} className="flex items-start gap-2 text-sm text-fg">
+              <span className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-bull-500/20 text-xs font-bold text-bull-500 dark:text-bull-400">
                 {idx + 1}
               </span>
               <span>{h}</span>
@@ -70,8 +70,8 @@ export function AIAnalysisPanel({ report, stockName }: AIAnalysisPanelProps) {
 
       {/* 風險速覽 */}
       <div className="mt-4">
-        <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-200">
-          <AlertTriangle className="h-4 w-4 text-amber-400" />
+        <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-fg">
+          <AlertTriangle className="h-4 w-4 text-amber-500 dark:text-amber-400" />
           主要風險
         </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -82,9 +82,9 @@ export function AIAnalysisPanel({ report, stockName }: AIAnalysisPanelProps) {
       </div>
 
       {/* 結論 */}
-      <div className="mt-4 rounded-lg border border-brand-500/20 bg-gradient-to-br from-brand-500/5 to-transparent p-4">
-        <div className="mb-2 text-sm font-semibold text-brand-400">一句話總結</div>
-        <p className="text-sm leading-relaxed text-slate-200">{report.conclusion}</p>
+      <div className="mt-4 rounded-lg border border-brand-500/30 bg-gradient-to-br from-brand-500/5 to-transparent p-4">
+        <div className="mb-2 text-sm font-semibold text-brand-500 dark:text-brand-400">一句話總結</div>
+        <p className="text-sm leading-relaxed text-fg">{report.conclusion}</p>
       </div>
     </Card>
   );
@@ -100,18 +100,18 @@ function RiskGroup({
   variant: 'bear' | 'warning' | 'default';
 }) {
   const headerColor =
-    variant === 'bear' ? 'text-bear-400' : variant === 'warning' ? 'text-amber-400' : 'text-slate-400';
+    variant === 'bear' ? 'text-bear-500 dark:text-bear-400' : variant === 'warning' ? 'text-amber-500 dark:text-amber-400' : 'text-fg-muted';
   return (
-    <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
+    <div className="rounded-md border border-edge bg-sunken p-3">
       <div className={`mb-1.5 text-xs font-semibold ${headerColor}`}>{title}</div>
       {risks.length === 0 ? (
-        <p className="text-xs text-slate-500">無顯著風險</p>
+        <p className="text-xs text-fg-subtle">無顯著風險</p>
       ) : (
         <ul className="space-y-1.5">
           {risks.map((r, idx) => (
             <li key={idx} className="text-xs">
-              <div className="font-medium text-slate-200">{r.title}</div>
-              <div className="mt-0.5 text-slate-400">{r.description}</div>
+              <div className="font-medium text-fg">{r.title}</div>
+              <div className="mt-0.5 text-fg-muted">{r.description}</div>
             </li>
           ))}
         </ul>

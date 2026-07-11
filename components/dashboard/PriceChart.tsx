@@ -57,7 +57,7 @@ export function PriceChart({ symbol, overview, initialData, initialRange }: Pric
       title="股價走勢"
       subtitle={`${overview.name} (${overview.symbol}) · ${overview.currency}`}
       actions={
-        <div className="flex rounded-md border border-slate-800 bg-slate-950/50 p-0.5">
+        <div className="flex rounded-md border border-edge bg-card p-0.5">
           {RANGES.map((r) => (
             <button
               key={r.value}
@@ -67,7 +67,7 @@ export function PriceChart({ symbol, overview, initialData, initialRange }: Pric
                 rounded px-2.5 py-1 text-xs font-medium transition-colors
                 ${range === r.value
                   ? 'bg-brand-500 text-white'
-                  : 'text-slate-400 hover:text-slate-100'}
+                  : 'text-fg-muted hover:text-fg hover:bg-hover'}
               `}
             >
               {r.label}
@@ -81,7 +81,7 @@ export function PriceChart({ symbol, overview, initialData, initialRange }: Pric
       ) : loading ? (
         <Skeleton className="h-64 w-full" />
       ) : data.length === 0 ? (
-        <div className="flex h-64 items-center justify-center text-sm text-slate-500">
+        <div className="flex h-64 items-center justify-center text-sm text-fg-muted">
           暫無資料
         </div>
       ) : (
@@ -94,10 +94,10 @@ export function PriceChart({ symbol, overview, initialData, initialRange }: Pric
                   <stop offset="100%" stopColor={chartColor} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
               <XAxis
                 dataKey="date"
-                stroke="#64748b"
+                stroke="var(--ink-tertiary)"
                 tick={{ fontSize: 11 }}
                 tickFormatter={(v: string) => {
                   const d = new Date(v);
@@ -106,7 +106,7 @@ export function PriceChart({ symbol, overview, initialData, initialRange }: Pric
                 minTickGap={50}
               />
               <YAxis
-                stroke="#64748b"
+                stroke="var(--ink-tertiary)"
                 tick={{ fontSize: 11 }}
                 tickFormatter={(v: number) => formatCurrency(v, overview.currency)}
                 domain={['auto', 'auto']}
@@ -114,12 +114,13 @@ export function PriceChart({ symbol, overview, initialData, initialRange }: Pric
               />
               <Tooltip
                 contentStyle={{
-                  background: '#0f172a',
-                  border: '1px solid #334155',
+                  background: 'var(--surface-card)',
+                  border: '1px solid var(--border-default)',
                   borderRadius: 8,
                   fontSize: 12,
+                  color: 'var(--ink-primary)',
                 }}
-                labelStyle={{ color: '#94a3b8' }}
+                labelStyle={{ color: 'var(--ink-secondary)' }}
                 formatter={(value: number) => [formatFullCurrency(value, overview.currency), '收盤價']}
               />
               <Area

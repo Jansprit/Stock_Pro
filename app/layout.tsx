@@ -38,8 +38,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      {/* 主題背景：light = paper white，dark = OLED 純黑 */}
-      <body className="min-h-screen bg-white text-slate-900 transition-colors duration-200 dark:bg-black dark:text-slate-100">
+      {/* 主題背景：用語意化 utility class，自動跟隨 html.dark 切換 */}
+      <body className="min-h-screen bg-app text-fg transition-colors duration-200">
         {children}
       </body>
     </html>

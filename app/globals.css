@@ -4,41 +4,54 @@
 
 /* ============================================================
  * 主題 CSS 變數（Light / Dark 主題色票）
- * light: paper white 為主，適合列印
- * dark : OLED 純黑為主，省電 + 護眼
+ * 設計參考：Linear / Vercel / GitHub Dark
+ * 主原則：
+ *   - Light: paper white 主色 + 深 slate 文字（列印友善）
+ *   - Dark : 中性深灰頁面（#0a0a0a）+ 比頁面亮的卡片（#171717）
+ *           + 高對比淺色文字（#ededed），避免「純黑 + 灰字」對比不足
  * ============================================================ */
 :root {
   color-scheme: light;
 
-  /* 主題背景 */
-  --surface-page: #f8fafc;       /* light: paper-50 */
-  --surface-card: #ffffff;       /* light: 純白卡 */
-  --surface-sunken: #f1f5f9;     /* light: nested */
+  /* 主題背景：light = 紙白 */
+  --surface-page: #f8fafc;       /* paper-50 */
+  --surface-card: #ffffff;       /* 純白卡 */
+  --surface-sunken: #f1f5f9;     /* nested */
 
-  /* 文字 */
-  --ink-primary: #0f172a;
-  --ink-secondary: #475569;
-  --ink-tertiary: #94a3b8;
+  /* 文字：light = 深 slate（高對比，可讀列印） */
+  --ink-primary: #0f172a;        /* slate-900 */
+  --ink-secondary: #475569;      /* slate-600 */
+  --ink-tertiary: #94a3b8;       /* slate-400 */
 
   /* 邊框 */
   --border-default: #e2e8f0;
   --border-strong: #cbd5e1;
+
+  /* 半透明表面（hover、selected） */
+  --surface-hover: #f1f5f9;
+  --border-hover: #cbd5e1;
 }
 
 html.dark {
   color-scheme: dark;
 
-  /* OLED 純黑：#000 才能讓 OLED 像素全關 */
-  --surface-page: #000000;
-  --surface-card: #0a0a0a;
-  --surface-sunken: #050505;
+  /* Dark 模式：頁面比卡片暗（Linear 風格，避免黑底黑字） */
+  --surface-page: #0a0a0a;       /* 比純黑略亮，OLED 省電 + 不死黑 */
+  --surface-card: #171717;       /* 比頁面亮一階，是 Linear 的招牌做法 */
+  --surface-sunken: #050505;     /* 更深（例如 modal 背景） */
 
-  --ink-primary: #f1f5f9;
-  --ink-secondary: #94a3b8;
-  --ink-tertiary: #64748b;
+  /* 文字：高對比淺色（不用 slate-100，會太灰太暗） */
+  --ink-primary: #ededed;        /* Near white - 主文字 */
+  --ink-secondary: #a1a1a1;      /* Neutral gray - 次要文字 */
+  --ink-tertiary: #707070;       /* Muted - 提示文字 */
 
-  --border-default: #1e293b;
-  --border-strong: #334155;
+  /* 邊框：低存在感，不搶焦點 */
+  --border-default: #262626;
+  --border-strong: #404040;
+
+  /* 半透明表面 */
+  --surface-hover: #1f1f1f;
+  --border-hover: #404040;
 }
 
 html, body {
@@ -94,68 +107,10 @@ html.dark ::selection {
   font-size: 11px;
 }
 
-/* === Slate 主題鏡像（dark 模式自動反轉 bg/text/border slate 色） === */
-@layer utilities {
-  /* 背景：light/dark 互為反轉 */
-  .bg-slate-50  { background-color: rgb(248 250 252); }
-  html.dark .bg-slate-50  { background-color: rgb(2 6 23); }      /* slate-950 */
-  .bg-slate-100 { background-color: rgb(241 245 249); }
-  html.dark .bg-slate-100 { background-color: rgb(2 6 23); }
-  .bg-slate-200 { background-color: rgb(226 232 240); }
-  html.dark .bg-slate-200 { background-color: rgb(15 23 42); }     /* slate-900 */
-  .bg-slate-300 { background-color: rgb(203 213 225); }
-  html.dark .bg-slate-300 { background-color: rgb(30 41 59); }     /* slate-800 */
-  .bg-slate-700 { background-color: rgb(51 65 85); }
-  html.dark .bg-slate-700 { background-color: rgb(51 65 85); }     /* 不變 */
-  .bg-slate-800 { background-color: rgb(30 41 59); }
-  html.dark .bg-slate-800 { background-color: rgb(15 23 42); }     /* slate-900 */
-  .bg-slate-900 { background-color: rgb(15 23 42); }
-  html.dark .bg-slate-900 { background-color: rgb(2 6 23); }       /* slate-950 */
-  .bg-slate-950 { background-color: rgb(2 6 23); }
-  html.dark .bg-slate-950 { background-color: rgb(0 0 0); }        /* OLED 純黑 */
+/* === 語意化主題 utility（由 Tailwind theme.extend.colors 生成） === */
+/* 例如：bg-card / bg-app / text-fg / text-fg-muted / border-edge 等 */
+/* 其對應的 var() 由 :root 與 html.dark 提供 */
 
-  /* 半透明背景（slate-XXX / YY 後綴） */
-  .bg-slate-900\/50 { background-color: rgb(15 23 42 / 0.5); }
-  html.dark .bg-slate-900\/50 { background-color: rgb(0 0 0 / 0.5); }
-  .bg-slate-950\/50 { background-color: rgb(2 6 23 / 0.5); }
-  html.dark .bg-slate-950\/50 { background-color: rgb(0 0 0 / 0.5); }
-  .bg-slate-800\/30 { background-color: rgb(30 41 59 / 0.3); }
-  html.dark .bg-slate-800\/30 { background-color: rgb(15 23 42 / 0.3); }
-  .bg-slate-800\/50 { background-color: rgb(30 41 59 / 0.5); }
-  html.dark .bg-slate-800\/50 { background-color: rgb(15 23 42 / 0.5); }
-
-  /* 文字：淺文字↔深文字 翻轉 */
-  .text-slate-100 { color: rgb(241 245 249); }
-  html.dark .text-slate-100 { color: rgb(15 23 23); }
-  .text-slate-200 { color: rgb(226 232 240); }
-  html.dark .text-slate-200 { color: rgb(51 65 85); }    /* slate-700 */
-  .text-slate-300 { color: rgb(203 213 225); }
-  html.dark .text-slate-300 { color: rgb(71 85 105); }   /* slate-600 */
-  .text-slate-400 { color: rgb(148 163 184); }
-  html.dark .text-slate-400 { color: rgb(100 116 139); } /* slate-500 */
-  .text-slate-500 { color: rgb(100 116 139); }
-  html.dark .text-slate-500 { color: rgb(100 116 139); }
-  .text-slate-600 { color: rgb(71 85 105); }
-  html.dark .text-slate-600 { color: rgb(148 163 184); } /* slate-400 */
-  .text-slate-900 { color: rgb(15 23 42); }
-  html.dark .text-slate-900 { color: rgb(241 245 249); } /* slate-100 */
-
-  /* 邊框 */
-  .border-slate-200 { border-color: rgb(226 232 240); }
-  html.dark .border-slate-200 { border-color: rgb(30 41 59); }  /* slate-800 */
-  .border-slate-700 { border-color: rgb(51 65 85); }
-  html.dark .border-slate-700 { border-color: rgb(51 65 85); }
-  .border-slate-800 { border-color: rgb(30 41 59); }
-  html.dark .border-slate-800 { border-color: rgb(51 65 85); }  /* slate-700 */
-  .border-slate-800\/50 { border-color: rgb(30 41 59 / 0.5); }
-  html.dark .border-slate-800\/50 { border-color: rgb(51 65 85 / 0.5); }
-
-  /* 純白 / 純黑 翻轉 */
-  .bg-white { background-color: #ffffff; }
-  html.dark .bg-white { background-color: #000000; }
-  .bg-black { background-color: #000000; }
-  html.dark .bg-black { background-color: #000000; }
-}
 
 /* === AI Loading 動畫（藍色液態玻璃） === */
 @keyframes ai-summary-shimmer {

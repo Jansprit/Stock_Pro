@@ -36,7 +36,7 @@ export function Dashboard({ data, aiError, isAiLoading = false, onRefresh }: Das
     <div className="space-y-5 animate-fade-in">
       {/* 頂部：總覽 + 重整 + 下載 PDF */}
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-xs text-slate-500">
+        <div className="flex items-center gap-2 text-xs text-fg-muted">
           <Tag variant="default">資料時間：{new Date(fetchedAt).toLocaleString('zh-TW')}</Tag>
         </div>
         <div className="flex items-center gap-2">
@@ -44,9 +44,9 @@ export function Dashboard({ data, aiError, isAiLoading = false, onRefresh }: Das
             type="button"
             onClick={onRefresh}
             className="
-              inline-flex items-center gap-1.5 rounded-md border border-slate-700
-              bg-slate-800/60 px-3 py-1.5 text-xs text-slate-300
-              transition-colors hover:bg-slate-700 hover:text-slate-100
+              inline-flex items-center gap-1.5 rounded-md border border-edge bg-card
+              px-3 py-1.5 text-xs text-fg-muted transition-colors
+              hover:bg-hover hover:text-fg
             "
           >
             <RefreshCw className="h-3.5 w-3.5" />

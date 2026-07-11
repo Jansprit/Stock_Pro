@@ -27,24 +27,24 @@ export function CompanyProfile({ overview }: CompanyProfileProps) {
 
   return (
     <Card title="公司基本資料" subtitle={overview.name}>
-      <p className="text-sm leading-relaxed text-slate-300">
+      <p className="text-sm leading-relaxed text-fg-muted">
         {truncate(overview.description || '暫無公司簡介', 600)}
       </p>
 
-      <div className="mt-4 grid grid-cols-1 gap-3 border-t border-slate-800 pt-4 sm:grid-cols-2">
+      <div className="mt-4 grid grid-cols-1 gap-3 border-t border-edge pt-4 sm:grid-cols-2">
         {info.map(({ Icon, label, value }) => (
           <div key={label} className="flex items-start gap-2">
-            <Icon className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
+            <Icon className="mt-0.5 h-4 w-4 shrink-0 text-fg-subtle" />
             <div className="min-w-0">
-              <div className="text-xs text-slate-500">{label}</div>
-              <div className="mt-0.5 truncate text-sm text-slate-100">{value}</div>
+              <div className="text-xs text-fg-subtle">{label}</div>
+              <div className="mt-0.5 truncate text-sm text-fg">{value}</div>
             </div>
           </div>
         ))}
       </div>
 
       {overview.website && (
-        <div className="mt-3 border-t border-slate-800 pt-3">
+        <div className="mt-3 border-t border-edge pt-3">
           <a
             href={overview.website}
             target="_blank"

@@ -50,7 +50,7 @@ export function ScoreCircle({
           <span className={`text-base font-bold ${colors.text}`}>{clamped}</span>
         </div>
       </div>
-      <span className="text-center text-xs text-slate-400">{label}</span>
+      <span className="text-center text-xs text-fg-muted">{label}</span>
     </div>
   );
 }

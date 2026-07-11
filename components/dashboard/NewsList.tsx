@@ -77,18 +77,18 @@ export function NewsList({ news, loading, error }: NewsListProps) {
             rel="noopener noreferrer"
             data-pdf-block="news-item"
             className="
-              group block rounded-lg border border-slate-800 bg-slate-900/40 p-3
-              transition-all hover:border-slate-700 hover:bg-slate-800/50
+              group block rounded-lg border border-edge bg-sunken p-3
+              transition-all hover:border-edge-hover hover:bg-hover
             "
           >
             <div className="flex items-start justify-between gap-2">
-              <h4 className="text-sm font-semibold leading-snug text-slate-100 group-hover:text-brand-400">
+              <h4 className="text-sm font-semibold leading-snug text-fg group-hover:text-brand-500">
                 {n.title}
               </h4>
-              <ExternalLink className="h-3.5 w-3.5 shrink-0 text-slate-600 group-hover:text-brand-400" />
+              <ExternalLink className="h-3.5 w-3.5 shrink-0 text-fg-subtle group-hover:text-brand-500" />
             </div>
 
-            <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-slate-400">
+            <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-fg-muted">
               {n.summary}
             </p>
 
@@ -97,13 +97,13 @@ export function NewsList({ news, loading, error }: NewsListProps) {
               <Tag variant={CATEGORY_VARIANTS[n.category]} size="sm">
                 {CATEGORY_LABELS[n.category]}
               </Tag>
-              <span className="text-xs text-slate-500">{n.publisher}</span>
-              <span className="text-xs text-slate-600">·</span>
-              <span className="text-xs text-slate-500">{formatDate(n.publishDate, 'relative')}</span>
+              <span className="text-xs text-fg-muted">{n.publisher}</span>
+              <span className="text-xs text-fg-subtle">·</span>
+              <span className="text-xs text-fg-muted">{formatDate(n.publishDate, 'relative')}</span>
             </div>
 
             {n.impact && (
-              <p className="mt-2 border-t border-slate-800/50 pt-2 text-xs italic text-slate-500">
+              <p className="mt-2 border-t border-edge pt-2 text-xs italic text-fg-muted">
                 💡 可能影響：{n.impact}
               </p>
             )}

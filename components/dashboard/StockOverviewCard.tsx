@@ -28,15 +28,15 @@ export function StockOverviewCard({ overview }: StockOverviewCardProps) {
       <div className="relative grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto]">
         {/* 左：名稱 + 代碼 */}
         <div>
-          <div className="flex items-center gap-2 text-slate-400">
+          <div className="flex items-center gap-2 text-fg-muted">
             <Building2 className="h-4 w-4" />
             <span className="text-xs">{overview.exchange}</span>
           </div>
-          <h2 className="mt-1 text-xl font-bold text-slate-100 sm:text-2xl">
+          <h2 className="mt-1 text-xl font-bold text-fg sm:text-2xl">
             {overview.name}
           </h2>
           <div className="mt-1 flex items-center gap-2">
-            <span className="rounded-md bg-slate-800 px-2 py-0.5 font-mono text-sm font-semibold text-slate-300">
+            <span className="rounded-md bg-sunken px-2 py-0.5 font-mono text-sm font-semibold text-fg">
               {overview.symbol}
             </span>
             {overview.sector && (
@@ -50,9 +50,9 @@ export function StockOverviewCard({ overview }: StockOverviewCardProps) {
 
         {/* 右：現價 + 漲跌 */}
         <div className="lg:text-right">
-          <div className="text-sm text-slate-400">現價</div>
+          <div className="text-sm text-fg-muted">現價</div>
           <div className="mt-0.5 flex items-baseline gap-2 lg:justify-end">
-            <span className="text-3xl font-bold tracking-tight text-slate-100 sm:text-4xl">
+            <span className="text-3xl font-bold tracking-tight text-fg sm:text-4xl">
               {formatFullCurrency(overview.price, overview.currency)}
             </span>
           </div>
@@ -69,7 +69,7 @@ export function StockOverviewCard({ overview }: StockOverviewCardProps) {
       </div>
 
       {/* 數據網格（4×2 重組：左 4 欄重點、右 4 欄次要） */}
-      <div className="relative mt-5 grid grid-cols-2 gap-x-4 gap-y-4 border-t border-slate-800 pt-5 sm:grid-cols-4 lg:grid-cols-4">
+      <div className="relative mt-5 grid grid-cols-2 gap-x-4 gap-y-4 border-t border-edge pt-5 sm:grid-cols-4 lg:grid-cols-4">
         <Metric
           label="市值"
           value={overview.marketCap ? formatCurrency(overview.marketCap, overview.currency) : 'N/A'}
@@ -146,26 +146,26 @@ function Metric({ label, value, delta, subValue }: {
 }) {
   return (
     <div>
-      <div className="flex items-center justify-between text-xs text-slate-500">
+      <div className="flex items-center justify-between text-xs text-fg-subtle">
         <span>{label}</span>
         {delta && (
-          <span className={`text-[10px] font-medium ${delta.pct >= 80 ? 'text-bear-400' : delta.pct <= 20 ? 'text-bull-400' : 'text-slate-500'}`}>
+          <span className={`text-[10px] font-medium ${delta.pct >= 80 ? 'text-bear-500 dark:text-bear-400' : delta.pct <= 20 ? 'text-bull-500 dark:text-bull-400' : 'text-fg-subtle'}`}>
             {delta.label}
           </span>
         )}
       </div>
-      <div className="mt-0.5 truncate text-sm font-semibold text-slate-100">{value}</div>
+      <div className="mt-0.5 truncate text-sm font-semibold text-fg">{value}</div>
       {/* 位置進度條 */}
       {delta && (
-        <div className="mt-1 h-0.5 w-full overflow-hidden rounded-full bg-slate-800">
+        <div className="mt-1 h-0.5 w-full overflow-hidden rounded-full bg-sunken">
           <div
-            className={`h-full rounded-full ${delta.pct >= 80 ? 'bg-bear-500' : delta.pct <= 20 ? 'bg-bull-500' : 'bg-slate-500'}`}
+            className={`h-full rounded-full ${delta.pct >= 80 ? 'bg-bear-500' : delta.pct <= 20 ? 'bg-bull-500' : 'bg-fg-subtle'}`}
             style={{ width: `${delta.pct}%` }}
           />
         </div>
       )}
       {subValue && (
-        <div className="mt-0.5 text-[10px] text-slate-500">{subValue}</div>
+        <div className="mt-0.5 text-[10px] text-fg-subtle">{subValue}</div>
       )}
     </div>
   );

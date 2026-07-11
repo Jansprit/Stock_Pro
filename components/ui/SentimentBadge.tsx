@@ -22,7 +22,7 @@ const config = {
   neutral: {
     label: '中性',
     bgClass: 'bg-slate-500/10 border-slate-500/30',
-    textClass: 'text-slate-400',
+    textClass: 'text-fg-muted',
     Icon: Minus,
   },
 } as const;
