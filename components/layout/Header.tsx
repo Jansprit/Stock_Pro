@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { LineChart, Clock } from 'lucide-react';
+import { LineChart, Clock, Settings as SettingsIcon } from 'lucide-react';
 import { SearchBar } from '@/components/search/SearchBar';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import { SettingsPanel } from '@/components/settings/SettingsPanel';
 
 interface HeaderProps {
   onSelectStock: (symbol: string) => void;
@@ -11,6 +12,7 @@ interface HeaderProps {
 
 export function Header({ onSelectStock }: HeaderProps) {
   const [now, setNow] = useState<Date | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     setNow(new Date());
@@ -53,9 +55,18 @@ export function Header({ onSelectStock }: HeaderProps) {
             <Clock className="h-3.5 w-3.5" />
             <span>更新時間：{formatted}</span>
           </div>
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="rounded-md p-1.5 text-fg-muted transition-colors hover:bg-hover hover:text-fg"
+            aria-label="設定與資料源說明"
+            title="資料源與架構說明"
+          >
+            <SettingsIcon className="h-4 w-4" />
+          </button>
           <ThemeToggle />
         </div>
       </div>
+      <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </header>
   );
 }
