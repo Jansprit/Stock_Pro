@@ -138,13 +138,28 @@ export async function fetchGoodinfoCompany(
   const url = `https://goodinfo.tw/tw/StockDetail.asp?STOCK_ID=${raw}`;
 
   return cached(`goodinfo:company:${raw}`, 24 * 60 * 60 * 1000, async () => {
-    const html = await _fetchHtml(url, {
-      headers: {
-        'Accept-Language': 'zh-TW,zh;q=0.9',
-        Referer: 'https://goodinfo.tw/',
-      },
-    });
-    return parseCompanyPage(html, url, raw);
+    // 重試 2 次：Goodinfo 偶爾因 page navigation 衝突回 page.content error
+    let lastErr: unknown = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const html = await _fetchHtml(url, {
+          headers: {
+            'Accept-Language': 'zh-TW,zh;q=0.9',
+            Referer: 'https://goodinfo.tw/',
+          },
+        });
+        const result = parseCompanyPage(html, url, raw);
+        if (result) return result;
+        lastErr = new Error('parseCompanyPage returned null');
+      } catch (err) {
+        lastErr = err;
+        if (attempt < 3) {
+          await new Promise((r) => setTimeout(r, 1500 * attempt));
+        }
+      }
+    }
+    console.warn(`[goodinfo] company fetch failed for ${symbol} after 3 attempts:`, lastErr);
+    return null;
   });
 }
 
@@ -297,6 +312,7 @@ export async function fetchGoodinfoPeersForSymbol(
   symbol: string,
   limit = 8,
 ): Promise<{ twseIndustry: string | null; peers: GoodinfoPeer[] }> {
+  // fetchGoodinfoCompany 內部已重試 3 次處理 Playwright page navigation race
   const company = await fetchGoodinfoCompany(symbol);
   if (!company?.twseIndustry) {
     return { twseIndustry: null, peers: [] };

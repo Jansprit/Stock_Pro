@@ -55,35 +55,46 @@ export async function fetchWithPlaywright(
   } = {},
 ): Promise<string> {
   const { waitUntil = 'domcontentloaded', timeout = 30_000, headers = {}, ignoreSslErrors = true } = options;
-  const browser = await getBrowser();
-  const ctx = await browser.newContext({
-    viewport: { width: 1280, height: 800 },
-    locale: 'zh-TW',
-    ignoreHTTPSErrors: ignoreSslErrors,
-    extraHTTPHeaders: {
-      'Accept-Language': 'zh-TW,zh;q=0.9,en;q=0.8',
-      ...headers,
-    },
-    userAgent:
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  });
-
-  try {
-    const page = await ctx.newPage();
-    await page.goto(url, { waitUntil, timeout });
-    // 等 GOODINFO JS 算完 CLIENT_KEY
-    if (url.includes('goodinfo.tw')) {
-      await page.waitForTimeout(2000);
-      // 若 list 頁，等 AJAX 載入 peers
-      if (url.includes('StockList')) {
-        try { await page.waitForLoadState('networkidle', { timeout: 8000 }); } catch { /* ignore */ }
+  // 重試 2 次：Playwright 偶爾在 page.content() 時丟「page is navigating」錯
+  // （多 call 並發時，browser singleton 內部 navigation race condition）
+  let lastErr: unknown = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const browser = await getBrowser();
+    const ctx = await browser.newContext({
+      viewport: { width: 1280, height: 800 },
+      locale: 'zh-TW',
+      ignoreHTTPSErrors: ignoreSslErrors,
+      extraHTTPHeaders: {
+        'Accept-Language': 'zh-TW,zh;q=0.9,en;q=0.8',
+        ...headers,
+      },
+      userAgent:
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    });
+    try {
+      const page = await ctx.newPage();
+      await page.goto(url, { waitUntil, timeout });
+      // 等 GOODINFO JS 算完 CLIENT_KEY
+      if (url.includes('goodinfo.tw')) {
         await page.waitForTimeout(2000);
+        // 若 list 頁，等 AJAX 載入 peers
+        if (url.includes('StockList')) {
+          try { await page.waitForLoadState('networkidle', { timeout: 8000 }); } catch { /* ignore */ }
+          await page.waitForTimeout(2000);
+        }
       }
+      const content = await page.content();
+      return content;
+    } catch (err) {
+      lastErr = err;
+      if (attempt < 3) {
+        await new Promise((r) => setTimeout(r, 1000 * attempt));
+      }
+    } finally {
+      await ctx.close();
     }
-    return await page.content();
-  } finally {
-    await ctx.close();
   }
+  throw lastErr instanceof Error ? lastErr : new Error('fetchWithPlaywright failed after 3 attempts');
 }
 
 /** 優雅關閉瀏覽器（測試 / shutdown 時用） */
