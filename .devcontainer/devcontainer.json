@@ -1,0 +1,23 @@
+{
+  "name": "Stock_Pro",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-20-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/playwright:1": {}
+  },
+  "postCreateCommand": "npm install",
+  "portsAttributes": {
+    "3000": {
+      "label": "Stock_Pro Dashboard",
+      "visibility": "public"
+    }
+  },
+  "forwardPorts": [3000],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "bradlc.vscode-tailwindcss"
+      ]
+    }
+  }
+}
