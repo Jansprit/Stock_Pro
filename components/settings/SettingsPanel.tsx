@@ -103,18 +103,18 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/85 p-4 backdrop-blur-lg"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-label="設定與資料源說明"
     >
       <div
-        className="relative max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-xl border border-edge bg-card shadow-2xl"
+        className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col rounded-xl border border-edge bg-card shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-edge bg-card px-6 py-4">
+        {/* Header — 固定高度 */}
+        <div className="flex items-center justify-between rounded-t-xl border-b border-edge bg-card px-6 py-4">
           <div className="flex items-center gap-2">
             <Database className="h-5 w-5 text-brand-500" />
             <h2 className="text-lg font-bold text-fg">資料源與架構</h2>
@@ -128,7 +128,10 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
           </button>
         </div>
 
-        <div className="space-y-6 p-6">
+        {/* Body — flex-1 + min-h-0 + overflow-y-auto 是唯一可滾動區。
+    min-h-0 是 flexbox scroll 必加的（否則內容過長會把容器撐開） */}
+        <div className="min-h-0 flex-1 overflow-y-auto bg-card p-6">
+          <div className="space-y-6">
           {/* 設計說明 */}
           <section className="rounded-lg border border-info/40 bg-info/5 p-4 text-sm">
             <div className="flex items-start gap-2">
@@ -230,9 +233,11 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               <li>想要自己的 key + 自訂額度？ → 5 分鐘自架一份（上方步驟）</li>
             </ul>
           </section>
+          </div>
         </div>
 
-        <div className="sticky bottom-0 flex items-center justify-between border-t border-edge bg-card px-6 py-3">
+        {/* Footer — 非 sticky，固定在 body 末尾，使用者滾到最底才看到 */}
+        <div className="flex items-center justify-between rounded-b-xl border-t border-edge bg-card px-6 py-3">
           <a
             href="https://github.com/Jansprit/Stock_Pro"
             target="_blank"
