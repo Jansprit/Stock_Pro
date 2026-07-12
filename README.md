@@ -210,6 +210,78 @@ stock-pro/
 
 其他股票也可搜尋，外部 API 拿不到基本資料時會用通用方式呈現。
 
+## 🐳 Docker 部署
+
+```bash
+# Build image（含 Playwright Chromium，~1.2GB）
+docker build -t stock-pro:latest .
+
+# 跑起來
+docker run -d \
+  --name stock-pro \
+  -p 3000:3000 \
+  -e AI_RELAY_BASE_URL=https://your-ai-relay.example.com \
+  -e AI_RELAY_MODEL=MiniMax-M2.7 \
+  -e AI_RELAY_API_KEY=your-relay-token \
+  -e FINNHUB_API_KEY=your-finnhub-key \
+  --restart unless-stopped \
+  stock-pro:latest
+
+# 看 log
+docker logs -f stock-pro
+
+# 健康檢查
+curl http://localhost:3000/api/search?q=AAPL
+```
+
+Image 使用：
+- `node:20-bookworm-slim` 基礎（image 小）
+- Next.js `output: 'standalone'`（build artifact 只含 runtime 必要檔案）
+- Playwright Chromium（爬 Goodinfo.tw JS challenge）
+- `dumb-init` 處理 signal forwarding
+- Non-root `nextjs` user（uid 1001）
+- HEALTHCHECK 內建於 image
+
+### Docker Compose
+
+```yaml
+# docker-compose.yml
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - AI_RELAY_BASE_URL=${AI_RELAY_BASE_URL}
+      - AI_RELAY_MODEL=${AI_RELAY_MODEL:-MiniMax-M2.7}
+      - AI_RELAY_API_KEY=${AI_RELAY_API_KEY}
+      - FINNHUB_API_KEY=${FINNHUB_API_KEY:-}
+    restart: unless-stopped
+```
+
+## ☁️ Cloud 部署選項
+
+| 平台 | 難度 | 備註 |
+|------|------|------|
+| **自架 VPS（推薦）** | 中 | Docker Compose 一鍵；需要 HTTPS（推薦 Caddy） |
+| **Railway / Render** | 易 | 支援 Dockerfile；直接 deploy from GitHub |
+| **Fly.io** | 易 | `fly launch` 自動偵測 Dockerfile |
+| **Vercel** | ⚠️ 不建議 | Vercel serverless 無法跑 Playwright Chromium |
+
+> ⚠️ **不支援 Vercel**：Playwright 需要持久 Chromium binary，Vercel serverless 無法持久化。
+
+## 🔐 安全性檢查清單
+
+部署前請確認：
+
+- [ ] `.env.local` 沒有 commit 到 git（執行 `git ls-files | grep env` 只應看到 `.env.local.example`）
+- [ ] HTTPS 已設定（Caddy / Cloudflare / nginx）
+- [ ] 已設定 rate limit（防止被當作 open proxy）
+- [ ] 已 rotate API keys（建議至少 90 天一次）
+- [ ] GitHub repo 啟用 Secret Scanning + Push Protection（Settings → Code security）
+
+詳細請見 [SECURITY.md](./SECURITY.md)。
+
 ## 📜 License
 
 MIT — 詳見 [LICENSE](./LICENSE)

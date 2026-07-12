@@ -1,0 +1,77 @@
+name: Bug report
+description: 回報 bug 協助我們修正
+labels: ["bug", "triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感謝回報 bug！請填寫以下資訊讓我們能快速重現與修復。
+
+  - type: input
+    id: symbol
+    attributes:
+      label: 受影響的股票代碼
+      description: 例：`2351.TW` 或 `AAPL`
+      placeholder: "2351.TW"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: source
+    attributes:
+      label: 哪個區塊出問題？
+      options:
+        - 公司基本資料
+        - 估值分析
+        - 股價走勢圖
+        - 財務趨勢圖
+        - AI 分析報告
+        - 最新新聞摘要
+        - 競爭對手比較
+        - 完整研究報告（摺疊）
+        - 其他 / 整體
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 預期行為
+      description: 你覺得應該要怎樣？
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 實際行為
+      description: 實際發生了什麼？（附截圖最好）
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 重現步驟
+      description: 怎麼重現？例如「搜尋 2351.TW → 看新聞 → 點第 3 則」
+    validations:
+      required: true
+
+  - type: input
+    id: env
+    attributes:
+      label: 環境
+      description: 部署方式（Docker / npm start / Vercel）+ Node.js / 瀏覽器版本
+      placeholder: "Docker (node:20-bookworm-slim), Chrome 124"
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 相關 log / 錯誤訊息
+      description: 貼出 server log 或 browser console 的錯誤（記得遮 API key）
+    validations:
+      required: false

@@ -1,0 +1,42 @@
+# Dependabot — 自動 PR 依賴更新
+# 文件：https://docs.github.com/en/code-security/dependabot/dependabot-version-updates
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    # 一次最多開 5 個 PR，避免 PR 暴風
+    open-pull-requests-limit: 5
+    # Group patch + minor updates 成單一 PR（major 各自開）
+    groups:
+      patch-and-minor:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    # PR 標籤 + commit prefix
+    labels:
+      - "dependencies"
+      - "auto-merge"
+    commit-message:
+      prefix: "chore(deps)"
+    # 不自動更新這些（會 break）
+    ignore:
+      - dependency-name: "next"
+        # Next.js major 升級需手動驗證 App Router 相容性
+      - dependency-name: "react"
+        # React major 升級需驗證 hooks 行為
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "ci"
+      - "auto-merge"
+    commit-message:
+      prefix: "ci(actions)"

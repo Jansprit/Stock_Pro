@@ -5,26 +5,63 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+# 最小權限：避免 workflow 內任何意外寫入 repo / release
+permissions:
+  contents: read
+
+# 取消同一 branch 前一次未完成的 run，節省 CI minutes
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
-    name: Build (Next.js)
+  # ===== 1. Lint + Type check =====
+  lint:
+    name: Lint & Type check
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci
+      - run: npm ci
+      # Next.js build 已含 tsc strict 檢查；先跑 lint 比較快失敗
+      - name: ESLint
+        run: npm run lint --if-present
+        continue-on-error: true  # lint warning 不擋 PR
+      - name: TypeScript strict check
+        run: npx tsc --noEmit
 
-      - name: Type check & build
+  # ===== 2. Build (Next.js) =====
+  build:
+    name: Build (Next.js)
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+
+      - run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Build
         # Next.js build 會順帶跑 TypeScript 型別檢查（tsconfig.json: strict）
         run: npm run build
         env:
@@ -41,3 +78,87 @@ jobs:
           path: .next
           retention-days: 7
           if-no-files-found: ignore
+
+  # ===== 3. Smoke test (啟動 production build，curl 健康檢查端點) =====
+  smoke:
+    name: Smoke test (start prod server)
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start server in background
+        env:
+          AI_RELAY_BASE_URL: https://your-ai-relay.example.com
+          AI_RELAY_API_KEY: ci-placeholder-key
+          PORT: 3000
+        run: |
+          nohup npm run start > /tmp/server.log 2>&1 &
+          echo "Server PID=$!"
+
+      - name: Wait for server ready
+        run: |
+          for i in {1..30}; do
+            if curl -sf http://localhost:3000/ > /dev/null; then
+              echo "Server ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Server failed to start"
+          tail -50 /tmp/server.log
+          exit 1
+
+      - name: Curl homepage (應回 200 + 含 AI Stock Research 字串)
+        run: |
+          curl -sf -w "\nHTTP %{http_code}\n" http://localhost:3000/ | tee /tmp/home.html
+          grep -q "AI Stock Research" /tmp/home.html || (echo "❌ FAIL: homepage missing brand"; exit 1)
+          echo "✅ Homepage OK"
+
+      - name: Curl /api/stock/AAPL (應回 200 JSON)
+        run: |
+          RESP=$(curl -sf -w "\n%{http_code}" http://localhost:3000/api/stock/AAPL)
+          CODE=$(echo "$RESP" | tail -1)
+          BODY=$(echo "$RESP" | head -n -1)
+          echo "HTTP $CODE"
+          echo "$BODY" | head -c 300
+          if [ "$CODE" != "200" ]; then
+            echo "❌ FAIL: /api/stock/AAPL returned $CODE"
+            exit 1
+          fi
+          echo "$BODY" | grep -q "overview" || (echo "❌ FAIL: missing overview"; exit 1)
+          echo "✅ API OK"
+
+  # ===== 4. CodeQL 資安掃描 =====
+  codeql:
+    name: CodeQL security scan
+    runs-on: ubuntu-latest
+    needs: lint
+    # PR 觸發時若程式碼有變更才跑（push main 必跑）
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript,typescript
+          queries: security-and-quality
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:typescript"

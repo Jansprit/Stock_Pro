@@ -1,0 +1,53 @@
+# 與 .gitignore 對齊 + Docker 特定排除
+
+# 環境變數 — 絕對不打包進 image（用 runtime env 注入）
+.env
+.env.local
+.env*.local
+.env.development
+.env.production
+
+# Next.js build artifacts（在 image 內重 build）
+.next/
+out/
+build/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Tests / coverage
+coverage/
+*.lcov
+
+# Probes / debug files（v0.3.x 開發期留下）
+probe-*.mjs
+probe-*.mts
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI
+.github/
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Documentation
+*.md
+LICENSE
+
+# Logs
+*.log
