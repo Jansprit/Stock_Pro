@@ -1,11 +1,13 @@
 {
   "name": "stock-pro",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "postbuild": "node scripts/copy-standalone-assets.mjs",
+    "start": "node .next/standalone/server.js",
+    "start:dev": "next start",
     "lint": "next lint"
   },
   "dependencies": {
