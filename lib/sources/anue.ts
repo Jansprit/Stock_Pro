@@ -61,7 +61,7 @@ function parseAnueSearchHtml(html: string, limit: number): AnueNewsItem[] {
     if (!/\/news\//.test(m[1])) continue;
     out.push({
       title,
-      url: m[1],
+      url: decodeHtmlEntities(m[1]),
       source: 'Anue',
     });
   }
@@ -89,6 +89,17 @@ function stripTags(s: string): string {
     .replace(/&quot;/g, '"')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/** 解碼 HTML entities — 主要給 URL 用，stripTags 會順便 strip 空白 */
+function decodeHtmlEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ');
 }
 
 export function isAvailable(): boolean {

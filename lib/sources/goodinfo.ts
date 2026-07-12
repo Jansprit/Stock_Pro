@@ -446,7 +446,9 @@ function parseNewsBlock(html: string, limit: number): GoodinfoNewsItem[] {
   let m: RegExpExecArray | null;
   let count = 0;
   while ((m = re.exec(html)) !== null && count < limit) {
-    const link = m[1];
+    // 對 link 做 HTML entity 解碼（&amp; → & 等），避免瀏覽器把 `&amp;` 當字面字元，
+    // 造成 query string 解析錯誤（例如 SUBJECT= 變成 SUBJECT&amp;…）
+    const link = decodeHtmlEntities(m[1]);
     const title = stripTags(m[2]).trim();
     const source = (m[3] ?? '').trim();
     const published = (m[4] ?? '').trim();
@@ -472,7 +474,7 @@ function parseNewsBlock(html: string, limit: number): GoodinfoNewsItem[] {
     while ((m = fallbackRe.exec(html)) !== null && out.length < limit) {
       out.push({
         title: stripTags(m[2]).trim(),
-        link: `https://goodinfo.tw${m[1]}`,
+        link: decodeHtmlEntities(`https://goodinfo.tw${m[1]}`),
         source: 'Goodinfo',
       });
     }
@@ -496,6 +498,20 @@ function stripTags(s: string): string {
     .replace(/&#39;/g, "'")
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/**
+ * 解碼 HTML entities（用於 URL，stripTags 內含 strip 空白，不適合 URL）。
+ * 重點處理：&amp; → &，這是 Goodinfo 公告連結最常見的編碼錯誤。
+ */
+function decodeHtmlEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ');
 }
 
 /* ============== 健康檢查 ============== */
