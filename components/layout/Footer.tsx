@@ -1,6 +1,10 @@
-import { ShieldAlert } from 'lucide-react';
+import { Github, ShieldAlert } from 'lucide-react';
+
+const REPO_URL = 'https://github.com/Jansprit/Stock_Pro';
+const APP_VERSION = '0.3.9';
 
 export function Footer() {
+  const releaseUrl = `${REPO_URL}/releases/tag/v${APP_VERSION}`;
   return (
     <footer className="mt-12 border-t border-edge bg-app">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
@@ -16,7 +20,28 @@ export function Footer() {
           </div>
         </div>
         <p className="mt-4 text-center text-xs text-fg-subtle">
-          © AI Stock Research Dashboard · Powered by Yahoo Finance & Claude AI
+          © AI Stock Research Dashboard · Powered by Yahoo Finance &amp; Claude AI
+          {' · '}
+          <a
+            href={releaseUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 font-mono text-fg-muted underline-offset-2 transition-colors hover:text-fg hover:underline"
+            title="在 GitHub 查看本版本原始碼"
+          >
+            <Github className="h-3 w-3" aria-hidden="true" />
+            v{APP_VERSION}
+          </a>
+          {' · '}
+          <a
+            href={REPO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline-offset-2 transition-colors hover:text-fg hover:underline"
+            title="GitHub repo"
+          >
+            GitHub
+          </a>
         </p>
       </div>
     </footer>
