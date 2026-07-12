@@ -46,6 +46,29 @@ interface YahooQuoteSummaryResponse {
   };
 }
 
+/** Yahoo v10 quoteSummary 可一次拿齊的指標清單（給 fetchQuoteSummaryData 用） */
+export interface YahooQuoteSummaryData {
+  // Analyst targets (financialData)
+  targetMeanPrice?: number;
+  targetLowPrice?: number;
+  targetHighPrice?: number;
+  recommendationKey?: 'strongBuy' | 'buy' | 'hold' | 'sell' | 'strongSell';
+  recommendationMean?: number;
+  numberOfAnalystOpinions?: number;
+  currentPrice?: number;
+  // Ratios (financialData)
+  trailingPE?: number;
+  forwardPE?: number;
+  epsTrailingTwelveMonths?: number;
+  epsForward?: number;
+  priceToBook?: number;
+  // 公司基本（assetProfile）
+  sector?: string;
+  industry?: string;
+  // 持股
+  sharesOutstanding?: number;
+}
+
 // ========== crumb 取得 ==========
 //
 // 注意：Yahoo Finance v10 需要「同意 cookie」(guce.yahoo.com 或 fc.yahoo.com)
@@ -108,9 +131,31 @@ async function fetchCrumb(): Promise<{ crumb: string; cookie: string } | null> {
 
 // ========== 公開函式 ==========
 
+/** 抓 Yahoo v10 quoteSummary 的分析師目標價（thin wrapper，保留向後相容） */
 export async function fetchAnalystTargets(symbol: string): Promise<YahooQuoteSummary | null> {
+  const data = await fetchQuoteSummaryData(symbol);
+  if (!data) return null;
+  return {
+    targetMeanPrice: data.targetMeanPrice,
+    targetLowPrice: data.targetLowPrice,
+    targetHighPrice: data.targetHighPrice,
+    recommendationKey: data.recommendationKey,
+    recommendationMean: data.recommendationMean,
+    numberOfAnalystOpinions: data.numberOfAnalystOpinions,
+    currentPrice: data.currentPrice,
+  };
+}
+
+/**
+ * 抓 Yahoo v10 quoteSummary 的分析師目標價、評級、EPS、PE、PB、sharesOutstanding 等
+ *
+ * 一次拿 financialData + defaultKeyStatistics 兩個 module。
+ * 比 fetchAnalystTargets 範圍更廣（多抓 EPS / forwardPE / priceToBook），
+ * 但仍共用同一個 crumb 機制與 cache。
+ */
+export async function fetchQuoteSummaryData(symbol: string): Promise<YahooQuoteSummaryData | null> {
   const { cached } = await import('../cache');
-  const key = `yahoo-qs:${symbol.toUpperCase()}`;
+  const key = `yahoo-qs-full:${symbol.toUpperCase()}`;
   return cached(key, TTL, async () => {
     const cr = await fetchCrumb();
     if (!cr) {
@@ -119,16 +164,20 @@ export async function fetchAnalystTargets(symbol: string): Promise<YahooQuoteSum
     }
     const { crumb, cookie } = cr;
     const sym = encodeURIComponent(symbol);
-    const modules = 'financialData';
+    const modules = 'financialData,defaultKeyStatistics,assetProfile';
     for (const host of QUERY_HOSTS) {
       const url = `https://${host}/v10/finance/quoteSummary/${sym}?modules=${modules}&crumb=${encodeURIComponent(crumb)}`;
       try {
         const res = await fetch(url, { headers: { ...BROWSER_HEADERS, Cookie: cookie } });
         if (!res.ok) continue;
-        const json = (await res.json()) as YahooQuoteSummaryResponse;
-        const fd = json?.quoteSummary?.result?.[0]?.financialData;
-        if (!fd) continue;
+        const json = (await res.json()) as YahooQuoteSummaryResponse & {
+          quoteSummary?: { result?: Array<{ assetProfile?: Record<string, { raw?: number; fmt?: string } | undefined> }> };
+        };
+        const fd = json?.quoteSummary?.result?.[0]?.financialData ?? {};
+        const ks = json?.quoteSummary?.result?.[0]?.defaultKeyStatistics ?? {};
+        const ap = json?.quoteSummary?.result?.[0]?.assetProfile ?? {};
         return {
+          // Analyst
           targetMeanPrice: pickNum(fd.targetMeanPrice),
           targetLowPrice: pickNum(fd.targetLowPrice),
           targetHighPrice: pickNum(fd.targetHighPrice),
@@ -136,6 +185,20 @@ export async function fetchAnalystTargets(symbol: string): Promise<YahooQuoteSum
           recommendationMean: pickNum(fd.recommendationMean),
           numberOfAnalystOpinions: pickNum(fd.numberOfAnalystOpinions),
           currentPrice: pickNum(fd.currentPrice),
+          // Ratios — financialData 提供 trailing/forward PE 與 EPS
+          trailingPE: pickNum(fd.trailingPE) ?? pickNum(ks.trailingPE),
+          forwardPE: pickNum(fd.forwardPE) ?? pickNum(ks.forwardPE),
+          // Yahoo v10 實際欄位名（已驗證）：
+          //   - financialData 沒有 epsTrailingTwelveMonths（只有 targetMeanPrice 等分析師欄位）
+          //   - defaultKeyStatistics.trailingEps / forwardEps 才是 EPS 正確來源
+          epsTrailingTwelveMonths: pickNum(ks.trailingEps),
+          epsForward: pickNum(ks.forwardEps),
+          priceToBook: pickNum(fd.priceToBook) ?? pickNum(ks.priceToBook),
+          // Sector / industry (assetProfile)
+          sector: ap.sector?.fmt ?? (ap.sector as unknown as string),
+          industry: ap.industry?.fmt ?? (ap.industry as unknown as string),
+          // Shares
+          sharesOutstanding: pickNum(ks.sharesOutstanding),
         };
       } catch {
         // try next host

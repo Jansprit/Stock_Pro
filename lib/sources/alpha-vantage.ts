@@ -244,6 +244,18 @@ export async function fetchFinancials(symbol: string): Promise<FinancialsData | 
   const balance = await fetchBalanceSheet(symbol);
   const cashflow = await fetchCashFlow(symbol);
 
+  // 從 OVERVIEW 拿最近 TTM EPS（給 INCOME_STATEMENT 缺 dilutedEPS 的外國發行人 fallback）
+  let overviewEPS: number | undefined;
+  try {
+    const overview = await fetchOverview(symbol);
+    if (overview?.EPS) {
+      const n = Number(overview.EPS);
+      if (isFinite(n) && n !== 0) overviewEPS = n;
+    }
+  } catch {
+    // 忽略
+  }
+
   const num = (v: string | undefined): number => {
     if (v == null || v === 'None' || v === '-') return 0;
     const n = Number(v);
@@ -265,6 +277,13 @@ export async function fetchFinancials(symbol: string): Promise<FinancialsData | 
     const grossProfit = num(iy.grossProfit);
     const operatingIncome = num(iy.operatingIncome);
     const netIncome = num(iy.netIncome);
+    // Alpha Vantage INCOME_STATEMENT 的 dilutedEPS 對外國發行人（NOK、TM 等 ADR）
+    // 常是 "None"（漏欄位），需 fallback 用 OVERVIEW 的 EPS（最近 TTM）
+    // 對美股本土發行人（如 AAPL）dilutedEPS 通常有值
+    let eps = num(iy.dilutedEPS);
+    if (eps === 0) {
+      eps = overviewEPS ?? 0;
+    }
     const totalAssets = num(by?.totalAssets);
     const totalLiabilities = num(by?.totalLiabilities);
     const totalEquity = num(by?.totalShareholderEquity);
@@ -276,15 +295,13 @@ export async function fetchFinancials(symbol: string): Promise<FinancialsData | 
 
     const year = iy.fiscalDateEnding ? Number(iy.fiscalDateEnding.slice(0, 4)) : 0;
 
-    // Alpha Vantage INCOME_STATEMENT 已不提供 EPS；以 EPS 為 0 標示。
-    // 若需要 EPS，可呼叫端用其他來源（Finnhub）補；前端 UI 會以 N/A 顯示。
     years.push({
       year,
       revenue,
       grossProfit,
       operatingIncome,
       netIncome,
-      eps: 0,
+      eps, // 改用 dilutedEPS（Alpha Vantage 仍有提供）
       totalAssets,
       totalLiabilities,
       totalEquity,

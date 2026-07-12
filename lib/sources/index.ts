@@ -384,10 +384,13 @@ export async function getStockOverview(symbol: string): Promise<StockOverview> {
     const valuation = await fetchValuationAndProfile(usedSymbol);
 
     // Step 2.5: 分析師目標價 + SEC EDGAR（美股）/ MOPS XBRL（台股）精確財報
+    //           + Yahoo v10 quoteSummary（補 EPS / PE / PB，Finnhub 拿不到時 fallback）
     const usedIsTaiwan = usedSymbol.endsWith('.TW') || usedSymbol.endsWith('.TWO');
-    const [analystData, secData] = await Promise.all([
+    const [analystData, secData, yahooQsData] = await Promise.all([
       fetchAnalystTargets(usedSymbol),
       usedIsTaiwan ? Promise.resolve(null) : fetchSecDataForUs(usedSymbol),
+      // Yahoo v10 quoteSummary 是 EPS / PE / PB 的最穩定來源（Finnhub metric 偶爾缺）
+      fetchYahooQuoteSummary(usedSymbol),
     ]);
 
     // Step 2.6: 台股個股抓 MOPS XBRL 精確財報（ETF 自動跳過）
@@ -415,18 +418,19 @@ export async function getStockOverview(symbol: string): Promise<StockOverview> {
       dayHigh: quoteMeta.dayHigh ?? 0,
       dayLow: quoteMeta.dayLow ?? 0,
       volume: quoteMeta.volume ?? 0,
-      // 估值欄位（valuation 補，quoteMeta 已有則保留）
+      // 估值欄位（valuation 補，quoteMeta 已有則保留；Yahoo v10 quoteSummary 作為最終 fallback）
       marketCap: valuation.marketCap ?? quoteMeta.marketCap,
-      trailingPE: valuation.trailingPE ?? quoteMeta.trailingPE,
-      forwardPE: valuation.forwardPE ?? quoteMeta.forwardPE,
-      eps: valuation.eps ?? quoteMeta.eps,
+      trailingPE: valuation.trailingPE ?? quoteMeta.trailingPE ?? yahooQsData?.trailingPE,
+      forwardPE: valuation.forwardPE ?? quoteMeta.forwardPE ?? yahooQsData?.forwardPE,
+      // priceToBook 暫存到 forwardPE 旁（types.ts 還沒獨立欄位，先不算）
+      eps: valuation.eps ?? quoteMeta.eps ?? yahooQsData?.epsTrailingTwelveMonths ?? yahooQsData?.epsForward,
       beta: valuation.beta ?? quoteMeta.beta,
       dividendYield: valuation.dividendYield ?? quoteMeta.dividendYield,
       fiftyTwoWeekHigh: valuation.fiftyTwoWeekHigh ?? quoteMeta.fiftyTwoWeekHigh,
       fiftyTwoWeekLow: valuation.fiftyTwoWeekLow ?? quoteMeta.fiftyTwoWeekLow,
-      // 公司基本（valuation 才有，mock 也有 sector/industry）
-      sector: valuation.sector ?? quoteMeta.sector ?? '',
-      industry: valuation.industry ?? quoteMeta.industry ?? '',
+      // 公司基本（valuation 才有，mock 也有 sector/industry；yahooQs 補漏）
+      sector: valuation.sector ?? quoteMeta.sector ?? yahooQsData?.sector ?? '',
+      industry: valuation.industry ?? quoteMeta.industry ?? yahooQsData?.industry ?? '',
       description: valuation.description ?? quoteMeta.description ?? '',
       website: valuation.website ?? quoteMeta.website ?? '',
       country: valuation.country ?? quoteMeta.country ?? '',
@@ -853,6 +857,15 @@ export async function getCompetitorMetrics(symbols: string[]): Promise<Map<strin
 async function fetchAnalystTargets(symbol: string): Promise<yahooQs.YahooQuoteSummary | null> {
   try {
     return await withRetry('yahoo-quote-summary', () => yahooQs.fetchAnalystTargets(symbol));
+  } catch {
+    return null;
+  }
+}
+
+/** 抓 Yahoo v10 quoteSummary 的 EPS / PE / PB（補 Finnhub 缺漏） */
+async function fetchYahooQuoteSummary(symbol: string): Promise<yahooQs.YahooQuoteSummaryData | null> {
+  try {
+    return await withRetry('yahoo-quote-summary-full', () => yahooQs.fetchQuoteSummaryData(symbol));
   } catch {
     return null;
   }

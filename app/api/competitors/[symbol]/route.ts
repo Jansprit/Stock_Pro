@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getCompetitorsForSymbol, hasCompetitorTable } from '@/lib/competitors';
-import { getCompetitorMetrics } from '@/lib/sources';
+import { getCompetitorsForSymbol, getIndustryPeers, hasCompetitorTable } from '@/lib/competitors';
+import { getCompetitorMetrics, getStockOverview } from '@/lib/sources';
 import { fetchGoodinfoPeersForSymbol, isAvailable as goodinfoAvailable } from '@/lib/sources/goodinfo';
 import type { ApiError, Competitor, CompetitorData } from '@/lib/types';
 
@@ -32,6 +32,47 @@ export async function GET(
     } catch (err) {
       console.error('[competitors] metrics error:', err);
       competitors = seeds.map((s) => ({ ...s }));
+    }
+  }
+
+  // Fallback A：用 industry 名稱查通用美股同業清單（解 NOK 這種「不在 COMPETITORS
+  //     但知道產業」的 case）。需先抓 overview 拿 industry 欄位。
+  if (competitors.length === 0) {
+    try {
+      const overview = await getStockOverview(symbol);
+      const industry = overview.industry || overview.sector;
+      const industryPeers = getIndustryPeers(industry);
+      if (industryPeers.length > 0) {
+        console.log(`[competitors] industry fallback for ${symbol}: industry=${industry}, ${industryPeers.length} peers`);
+        try {
+          const symbols = industryPeers.map((p) => p.symbol);
+          const metrics = await getCompetitorMetrics(symbols);
+          competitors = industryPeers.map((p) => ({
+            symbol: p.symbol,
+            name: p.name,
+            marketPosition: p.marketPosition,
+            coreStrength: p.coreStrength,
+            coreRisk: p.coreRisk,
+            source: 'industry-fallback',
+            ...metrics.get(p.symbol),
+          }));
+        } catch (err) {
+          console.warn('[competitors] industry fallback metrics error:', err);
+          competitors = industryPeers.map((p) => ({
+            symbol: p.symbol,
+            name: p.name,
+            marketPosition: p.marketPosition,
+            coreStrength: p.coreStrength,
+            coreRisk: p.coreRisk,
+            source: 'industry-fallback',
+            pe: p.pe,
+            ps: p.ps,
+            evEbitda: p.evEbitda,
+          }));
+        }
+      }
+    } catch (err) {
+      console.warn('[competitors] industry fallback overview failed:', err);
     }
   }
 

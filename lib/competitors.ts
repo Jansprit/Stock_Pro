@@ -244,3 +244,59 @@ export function getCompetitorsForSymbol(symbol: string): Competitor[] {
 export function hasCompetitorTable(symbol: string): boolean {
   return symbol.toUpperCase() in COMPETITORS;
 }
+
+/** 測試 / 健康檢查 */
+export function isAvailable(): boolean {
+  return true;
+}
+
+// ========== 行業 / 產業分類 → 通用美股同業清單 ==========
+//
+// 用途：當某檔個股（如 NOK / Communications）不在 COMPETITORS map 時，
+// 改用其 industry 從這張表查同業。涵蓋常見 US sector / industry。
+//
+// 注意：這是「合理 fallback」，不是精準 mapping。
+// 真正的精準是各公司自家 10-K 的 Item 1 Competition 章節。
+
+export interface IndustryPeer {
+  symbol: string;
+  name: string;
+  marketPosition: string;
+  coreStrength: string;
+  coreRisk: string;
+  pe?: number;
+  ps?: number;
+  evEbitda?: number;
+}
+
+export const INDUSTRY_PEERS: Record<string, IndustryPeer[]> = {
+  // 通訊設備（NOK / ERIC / CSCO 屬此）
+  'Communication Equipment': [
+    { symbol: 'CSCO', name: 'Cisco Systems', marketPosition: '企業網通龍頭', coreStrength: '路由器/交換器市占', coreRisk: '成長趨緩', pe: 18, ps: 4.5, evEbitda: 13 },
+    { symbol: 'MSI', name: 'Motorola Solutions', marketPosition: '公共安全通訊', coreStrength: '政府標案穩定', coreRisk: '估值偏高', pe: 32, ps: 6, evEbitda: 20 },
+    { symbol: 'ERIC', name: 'Ericsson (ADR)', marketPosition: '5G 設備大廠', coreStrength: '電信營運商關係', coreRisk: '中國華為競爭', pe: 16, ps: 1.2, evEbitda: 8 },
+    { symbol: 'QCOM', name: 'Qualcomm', marketPosition: '行動晶片 + 授權', coreStrength: '專利授權收入', coreRisk: '手機市場成熟', pe: 18, ps: 4, evEbitda: 12 },
+    { symbol: 'JNPR', name: 'Juniper Networks', marketPosition: '企業路由/資料中心', coreStrength: 'Mist AI 平台', coreRisk: '思科擠壓', pe: 22, ps: 2.5, evEbitda: 14 },
+  ],
+  // 科技硬體
+  'Computer Hardware': [
+    { symbol: 'DELL', name: 'Dell Technologies', marketPosition: '伺服器/儲存', coreStrength: '企業客戶關係', coreRisk: 'PC 市場萎縮', pe: 18, ps: 1.2, evEbitda: 11 },
+    { symbol: 'HPE', name: 'Hewlett Packard Enterprise', marketPosition: '企業 IT 基礎設施', coreStrength: 'Edge 運算布局', coreRisk: '雲端競爭', pe: 12, ps: 1, evEbitda: 9 },
+    { symbol: 'HPQ', name: 'HP Inc.', marketPosition: 'PC / 列印', coreStrength: '商用 PC 市占', coreRisk: '列印市場萎縮', pe: 10, ps: 0.5, evEbitda: 7 },
+  ],
+  // 通訊服務
+  'Telecom Services': [
+    { symbol: 'T', name: 'AT&T', marketPosition: '美國電信', coreStrength: '5G + 光纖覆蓋', coreRisk: '高負債', pe: 9, ps: 1.4, evEbitda: 7 },
+    { symbol: 'VZ', name: 'Verizon', marketPosition: '美國最大電信', coreStrength: '頻譜資源', coreRisk: '競爭 + 利率', pe: 10, ps: 1.5, evEbitda: 7.5 },
+    { symbol: 'TMUS', name: 'T-Mobile US', marketPosition: '美國電信 #3', coreStrength: '5G 領先', coreRisk: '客戶成長趨緩', pe: 23, ps: 2.7, evEbitda: 11 },
+  ],
+};
+
+/**
+ * 從 industry 名稱查 fallback 同業群（大小寫不敏感）
+ */
+export function getIndustryPeers(industry: string | undefined): IndustryPeer[] {
+  if (!industry) return [];
+  const key = Object.keys(INDUSTRY_PEERS).find((k) => k.toLowerCase() === industry.toLowerCase());
+  return key ? INDUSTRY_PEERS[key]! : [];
+}
