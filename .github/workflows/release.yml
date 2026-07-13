@@ -1,0 +1,70 @@
+name: Release on tag
+
+# 當 package.json 的 version 變更並 commit 後，手動或自動 push tag 就會發 Release。
+# 流程：
+#   1. 修改 package.json version
+#   2. git commit -m "release: v0.X.Y"
+#   3. git tag -a v0.X.Y -m "..."
+#   4. git push origin main --tags
+#   5. 此 workflow 自動 build + 建立 GitHub Release（含 standalone build artifact）
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write  # 需要寫入 release
+
+jobs:
+  release:
+    name: Build & Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Build production bundle
+        env:
+          # CI placeholder — release 不打真實 API
+          AI_RELAY_BASE_URL: https://your-ai-relay.example.com
+          AI_RELAY_API_KEY: ci-placeholder-key
+        run: npm run build
+
+      # 打包 standalone build 成可下載 zip
+      - name: Package standalone build
+        run: |
+          cd .next/standalone
+          # 把 node_modules + server.js + 必要檔案 zip 起來
+          # 排除 dev artifacts：.next/cache, .next/server/pages, sourcemaps
+          zip -r ../../stock-pro-standalone-${{ github.ref_name }}.zip . \
+            -x "*.map" \
+            -x ".next/cache/*" \
+            -x ".next/server/pages/*" \
+            -x ".next/server/app-paths-manifest.json"
+          cd ../..
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          # 從 commit message 自動產生 release notes
+          generate_release_notes: true
+          files: |
+            stock-pro-standalone-${{ github.ref_name }}.zip
+            .env.local.example
+            README.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -282,6 +282,71 @@ services:
 
 詳細請見 [SECURITY.md](./SECURITY.md)。
 
+## 🏷️ 版本管理（Tag + Release）
+
+本專案用 **git tag + GitHub Release** 永久保留每個版本的程式碼與 binary。
+
+### 版本命名
+
+- 0.x.y — 開發版（可能隨時壞）
+- 1.0.0 — 公開穩定版（CI 全綠 + 文件完整）
+
+每次升版流程（開發者）：
+
+```bash
+# 1. 改 package.json version
+vim package.json  # 0.3.10 → 0.4.0
+
+# 2. commit（用 feat/fix prefix 區分）
+git commit -am "feat(release): v0.4.0 — Settings 頁"
+
+# 3. 建 annotated tag（包含版本說明）
+git tag -a v0.4.0 -m "Settings 頁（極簡純資訊版，無登入無輸入框）"
+
+# 4. push 觸發自動 release
+git push origin main --tags
+```
+
+`git push --tags` 觸發 `.github/workflows/release.yml`：
+
+1. 跑 `npm ci` + 安裝 Playwright Chromium
+2. `npm run build`（含 tsc strict check）
+3. 把 `.next/standalone` 打成 zip（含 node_modules + server.js）
+4. 上傳到 GitHub Release（含自動產生的 changelog）
+5. 朋友可以從 `https://github.com/Jansprit/Stock_Pro/releases/tag/v0.4.0` 下載
+
+### 已發布版本
+
+| Tag | Commit | 重點 |
+|-----|--------|------|
+| v0.4.2 | a4e8324 | SEC EDGAR 補美股財報三表 fallback |
+| v0.4.1 | 358313e | Settings modal 自適應 |
+| v0.4.0 | 8399f78 | Settings 頁（純資訊版） |
+| v0.3.9 | 33e17c7 | start.bat wait_loop fix |
+| v0.3.7 | 2dbdadb | standalone 自動複製 static |
+| v0.3.2 | bb96f42 | PE/PB 同業 + AI 評分依據 |
+| ... 完整列表見 `git tag` |
+
+### 回朔到舊版（demo 出問題時）
+
+```bash
+# 拉特定 tag 的 standalone build
+git clone https://github.com/Jansprit/Stock_Pro.git --branch v0.3.9 /tmp/stock-pro-v0.3.9
+cd /tmp/stock-pro-v0.3.9
+npm install
+npx playwright install chromium
+npm run build
+npm start
+```
+
+或直接從 GitHub Release 下載對應 zip：
+
+```bash
+wget https://github.com/Jansprit/Stock_Pro/releases/download/v0.3.9/stock-pro-standalone-v0.3.9.zip
+unzip stock-pro-standalone-v0.3.9.zip
+node server.js
+```
+
 ## 📜 License
 
 MIT — 詳見 [LICENSE](./LICENSE)
