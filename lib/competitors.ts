@@ -283,6 +283,8 @@ export const INDUSTRY_PEERS: Record<string, IndustryPeer[]> = {
     { symbol: 'DELL', name: 'Dell Technologies', marketPosition: '伺服器/儲存', coreStrength: '企業客戶關係', coreRisk: 'PC 市場萎縮', pe: 18, ps: 1.2, evEbitda: 11 },
     { symbol: 'HPE', name: 'Hewlett Packard Enterprise', marketPosition: '企業 IT 基礎設施', coreStrength: 'Edge 運算布局', coreRisk: '雲端競爭', pe: 12, ps: 1, evEbitda: 9 },
     { symbol: 'HPQ', name: 'HP Inc.', marketPosition: 'PC / 列印', coreStrength: '商用 PC 市占', coreRisk: '列印市場萎縮', pe: 10, ps: 0.5, evEbitda: 7 },
+    { symbol: 'AAPL', name: 'Apple Inc.', marketPosition: '消費電子 / Mac', coreStrength: '品牌溢價 + 生態系', coreRisk: 'iPhone 依賴', pe: 30, ps: 8, evEbitda: 25 },
+    { symbol: 'IBM', name: 'IBM', marketPosition: '企業 IT 服務 / 顧問', coreStrength: '大型客戶關係', coreRisk: '傳統業務萎縮', pe: 22, ps: 3, evEbitda: 13 },
   ],
   // 通訊服務
   'Telecom Services': [
@@ -299,4 +301,62 @@ export function getIndustryPeers(industry: string | undefined): IndustryPeer[] {
   if (!industry) return [];
   const key = Object.keys(INDUSTRY_PEERS).find((k) => k.toLowerCase() === industry.toLowerCase());
   return key ? INDUSTRY_PEERS[key]! : [];
+}
+
+/**
+ * SEC 4-digit SIC code → INDUSTRY_PEERS key 對應表
+ *
+ * SIC 是美國 SEC 統一的產業分類（比 Yahoo v10 assetProfile 的粗分類
+ * 「Technology / Communications」細很多）。
+ *
+ * Source: https://www.sec.gov/corpfin/division-of-corporation-finance-standard-industrial-classification
+ *
+ * 涵蓋常見 US 上市公司（用 SEC submissions endpoint 的 `sic` 欄位查表）
+ *
+ * 注意：只有第一層主要 SIC（companies 偶爾會有多個 SIC，這裡只取第一個）
+ */
+export const SIC_TO_INDUSTRY: Record<string, string> = {
+  // ============ 3570-3599: Computer & Office Equipment ============
+  '3570': 'Computer Hardware',          // Computer & Office Equipment (HPQ / IBM)
+  '3571': 'Computer Hardware',          // Electronic Computers (AAPL / Dell)
+  '3572': 'Computer Hardware',          // Computer Storage Devices
+  '3575': 'Computer Hardware',          // Computer Terminals
+  '3576': 'Communication Equipment',    // Computer Communications (Cisco)
+  '3577': 'Computer Hardware',          // Computer Peripheral Equipment
+  '3578': 'Computer Hardware',          // Calculating Machines
+  '3579': 'Computer Hardware',          // Office Machines NEC
+
+  // ============ 3600-3699: Electronic & Other Electrical Equipment ============
+  '3672': 'Semiconductors',             // Printed Circuit Boards
+  '3674': 'Semiconductors',             // Semiconductors (NVDA / AMD / Intel)
+  '3678': 'Semiconductors',             // Electronic Connectors
+  '3679': 'Semiconductors',             // Electronic Components NEC
+  '3695': 'Computer Hardware',          // Magnetic & Optical Recording Media
+
+  // ============ 4800-4899: Communications ============
+  '4812': 'Telecom Services',           // Radiotelephone Communications
+  '4813': 'Telecom Services',           // Telephone Communications (T / VZ / TMUS)
+  '4822': 'Telecom Services',           // Telegraph & Other Communications
+  '4832': 'Telecom Services',           // Radio Broadcasting Stations
+  '4833': 'Telecom Services',           // Television Broadcasting Stations
+  '4841': 'Telecom Services',           // Cable & Other Pay Television
+  '4899': 'Telecom Services',           // Communications Services NEC
+
+  // ============ 7300-7399: Services-Miscellaneous Business ============
+  '7370': 'Computer Hardware',          // Services-Computer Programming & Data Processing (外包業)
+  '7371': 'Computer Hardware',          // Services-Computer Programming & Data Processing
+  '7372': 'Computer Hardware',          // Prepackaged Software (但其實是 SaaS，不準)
+  '7373': 'Computer Hardware',          // Computer Integrated Systems Design
+  '7374': 'Computer Hardware',          // Services-Computer Processing & Data Preparation
+};
+
+/**
+ * 把 SEC SIC code（4 位數字串）轉成 INDUSTRY_PEERS key
+ *
+ * 規則：精確 4 位 → 對應表 → 找不到回 undefined（讓 caller 走下一個 fallback）
+ */
+export function sicToIndustry(sic: string | undefined | null): string | undefined {
+  if (!sic) return undefined;
+  const padded = String(sic).padStart(4, '0');
+  return SIC_TO_INDUSTRY[padded];
 }

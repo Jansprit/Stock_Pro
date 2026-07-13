@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getCompetitorsForSymbol, getIndustryPeers, hasCompetitorTable } from '@/lib/competitors';
+import { getCompetitorsForSymbol, getIndustryPeers, hasCompetitorTable, sicToIndustry } from '@/lib/competitors';
 import { getCompetitorMetrics, getStockOverview } from '@/lib/sources';
 import { fetchGoodinfoPeersForSymbol, isAvailable as goodinfoAvailable } from '@/lib/sources/goodinfo';
+import * as secCik from '@/lib/sources/sec-cik';
+import * as secEdgar from '@/lib/sources/sec-edgar';
 import type { ApiError, Competitor, CompetitorData } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -40,14 +42,42 @@ export async function GET(
   if (competitors.length === 0) {
     try {
       const overview = await getStockOverview(symbol);
-      const industry = overview.industry || overview.sector;
+      let industry = overview.industry || overview.sector;
+
+      // Fallback A-1：若 Yahoo v10 industry 太粗（如 'Technology'）找不到對應的 peer group，
+      //     用 SEC submissions 的 SIC code（更精準的 4 位數字分類）→ 對應 SIC_TO_INDUSTRY map
+      if (!industry || !getIndustryPeers(industry).length) {
+        const isUs = !symbol.endsWith('.TW') && !symbol.endsWith('.TWO');
+        if (isUs) {
+          try {
+            const cik = await secCik.lookupCikByTicker(symbol);
+            if (cik) {
+              const info = await secEdgar.fetchSecCompanyInfo(cik);
+              if (info?.sic) {
+                const sicIndustry = sicToIndustry(info.sic);
+                if (sicIndustry) {
+                  industry = sicIndustry;
+                  console.log(`[competitors] SIC fallback for ${symbol}: sic=${info.sic} (${info.sicDescription}) → ${industry}`);
+                }
+              }
+            }
+          } catch (sicErr) {
+            console.warn(`[competitors] SIC lookup failed for ${symbol}:`, sicErr);
+          }
+        }
+      }
+
       const industryPeers = getIndustryPeers(industry);
-      if (industryPeers.length > 0) {
-        console.log(`[competitors] industry fallback for ${symbol}: industry=${industry}, ${industryPeers.length} peers`);
+      // 過濾掉自己（避免 HPQ 出現在自己的 peer 清單）
+      const filteredPeers = industryPeers.filter(
+        (p) => p.symbol.toUpperCase() !== symbol.toUpperCase(),
+      );
+      if (filteredPeers.length > 0) {
+        console.log(`[competitors] industry fallback for ${symbol}: industry=${industry}, ${filteredPeers.length} peers (filtered ${industryPeers.length - filteredPeers.length} self)`);
         try {
-          const symbols = industryPeers.map((p) => p.symbol);
+          const symbols = filteredPeers.map((p) => p.symbol);
           const metrics = await getCompetitorMetrics(symbols);
-          competitors = industryPeers.map((p) => ({
+          competitors = filteredPeers.map((p) => ({
             symbol: p.symbol,
             name: p.name,
             marketPosition: p.marketPosition,
@@ -58,7 +88,7 @@ export async function GET(
           }));
         } catch (err) {
           console.warn('[competitors] industry fallback metrics error:', err);
-          competitors = industryPeers.map((p) => ({
+          competitors = filteredPeers.map((p) => ({
             symbol: p.symbol,
             name: p.name,
             marketPosition: p.marketPosition,

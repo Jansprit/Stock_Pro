@@ -349,6 +349,62 @@ export async function fetchSecFinancialHistory(
   });
 }
 
+// ========== SIC code 查詢（用於產業分類 fallback） ==========
+
+export interface SecCompanyInfo {
+  cik: number;
+  entityName: string;
+  /** 4 位數字 SIC code（如 '3571' = Electronic Computers） */
+  sic?: string;
+  /** SEC 提供的 SIC 文字描述 */
+  sicDescription?: string;
+  /** 交易所代號（如 'NASDAQ'） */
+  exchanges?: string[];
+  /** 申報 fiscal year 結束日（MMDD 格式，如 '0926' = 9/26） */
+  fiscalYearEnd?: string;
+}
+
+/**
+ * 抓 SEC submissions endpoint，拿到公司基本資料（含 SIC code）
+ *
+ * 端點：https://data.sec.gov/submissions/CIK{CIK10}.json
+ * 大小：~50KB（比 companyfacts 小很多）
+ *
+ * @param cik SEC 中央索引鍵
+ */
+export async function fetchSecCompanyInfo(cik: number): Promise<SecCompanyInfo | null> {
+  return cached(`sec:submissions:${cik}`, TTL, async () => {
+    const cikPadded = String(cik).padStart(10, '0');
+    const url = `${BASE_URL}/submissions/CIK${cikPadded}.json`;
+    try {
+      const res = await fetch(url, { headers: HEADERS, cache: 'no-store' });
+      if (!res.ok) {
+        console.warn(`[sec] submissions CIK${cikPadded}: HTTP ${res.status}`);
+        return null;
+      }
+      const data = (await res.json()) as {
+        cik: number;
+        name: string;
+        sic?: string;
+        sicDescription?: string;
+        exchanges?: string[];
+        fiscalYearEnd?: string;
+      };
+      return {
+        cik: data.cik,
+        entityName: data.name,
+        sic: data.sic,
+        sicDescription: data.sicDescription,
+        exchanges: data.exchanges,
+        fiscalYearEnd: data.fiscalYearEnd,
+      };
+    } catch (e) {
+      console.warn(`[sec] submissions CIK${cik} failed:`, e instanceof Error ? e.message : e);
+      return null;
+    }
+  });
+}
+
 /** 判斷是否啟用 SEC EDGAR（始終免費，但需要 User-Agent 政策合規） */
 export function isAvailable(): boolean {
   return true;
