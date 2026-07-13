@@ -17,6 +17,7 @@ import type {
   StockOverview,
   PricePoint,
   FinancialsData,
+  FinancialYear,
   NewsItem,
   ChartRange,
   Competitor,
@@ -601,7 +602,7 @@ function parseAlphaDailyToPoints(
 
 export async function getFinancials(symbol: string): Promise<FinancialsData> {
   const sym = symbol.toUpperCase();
-  return cached(`financials:${sym}`, DEFAULT_TTL, async () => {
+  return cached(`financials:v4:${sym}`, DEFAULT_TTL, async () => {
     // 0. 台股個股 → MOPS XBRL 抓近 5 年年度累計（Alpha Vantage 對台股覆蓋極差）
     if (sym.endsWith('.TW') || sym.endsWith('.TWO')) {
       const rawSymbol = sym.replace(/\.(TW|TWO)$/, '');
@@ -629,7 +630,26 @@ export async function getFinancials(symbol: string): Promise<FinancialsData> {
     }
     console.log('[fallback] alphavantage financials failed');
 
-    // 2. 全部失敗：回傳空財報（前端 UI 會顯示「無資料」）
+    // 2. SEC EDGAR（無 rate limit，US 個股官方資料；當 AV 額度耗光時 fallback）
+    //    限美股（無 .TW / .TWO / .HK 等後綴）
+    if (!sym.endsWith('.TW') && !sym.endsWith('.TWO')) {
+      try {
+        const cik = await secCik.lookupCikByTicker(sym);
+        if (cik) {
+          const history = await secEdgar.fetchSecFinancialHistory(cik, 5);
+          if (history && history.years.length > 0) {
+            const converted = secHistoryToFinancialYears(history);
+            if (converted.length > 0) {
+              return { symbol: sym, currency: 'USD', years: converted };
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[fallback] sec.edgar financials failed:', e instanceof Error ? e.message : e);
+      }
+    }
+
+    // 3. 全部失敗：回傳空財報（前端 UI 會顯示「無資料」）
     return mock.getEmptyFinancials(sym);
   });
 }
@@ -890,6 +910,45 @@ async function fetchMopsDataForTw(symbol: string): Promise<mopsXbrl.MopsFundamen
   } catch {
     return null;
   }
+}
+
+/** 把 SEC EDGAR 多年期資料轉成 FinancialYear[]（補上計算欄位） */
+function secHistoryToFinancialYears(history: secEdgar.SecFinancialHistory): FinancialYear[] {
+  return history.years
+    .filter((y) => y.revenue !== undefined || y.netIncome !== undefined)
+    .map((y) => {
+      const revenue = y.revenue ?? 0;
+      const grossProfit = y.grossProfit ?? 0;
+      const operatingIncome = y.operatingIncome ?? 0;
+      const netIncome = y.netIncome ?? 0;
+      const totalAssets = y.totalAssets ?? 0;
+      const totalEquity = y.totalEquity ?? 0;
+      const totalLiabilities = y.totalLiabilities ?? 0;
+      const operatingCashFlow = y.operatingCashFlow ?? 0;
+      const capex = y.capex ?? 0;
+      const freeCashFlow = operatingCashFlow - capex;
+      const safeDiv = (n: number, d: number): number =>
+        !isFinite(n) || !isFinite(d) || d === 0 ? 0 : n / d;
+      return {
+        year: y.year,
+        revenue,
+        grossProfit,
+        operatingIncome,
+        netIncome,
+        eps: y.eps ?? 0,
+        totalAssets,
+        totalLiabilities,
+        totalEquity,
+        operatingCashFlow,
+        freeCashFlow,
+        grossMargin: safeDiv(grossProfit, revenue) * 100,
+        operatingMargin: safeDiv(operatingIncome, revenue) * 100,
+        netMargin: safeDiv(netIncome, revenue) * 100,
+        roe: (totalEquity > 0) ? safeDiv(netIncome, totalEquity) * 100 : 0,
+        roa: safeDiv(netIncome, totalAssets) * 100,
+        debtToEquity: safeDiv(totalLiabilities, totalEquity) * 100,
+      };
+    });
 }
 
 /** 整合 5 個估值模型，產出 ValuationResult */

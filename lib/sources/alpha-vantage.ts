@@ -310,7 +310,8 @@ export async function fetchFinancials(symbol: string): Promise<FinancialsData | 
       grossMargin: safeDiv(grossProfit, revenue) * 100,
       operatingMargin: safeDiv(operatingIncome, revenue) * 100,
       netMargin: safeDiv(netIncome, revenue) * 100,
-      roe: safeDiv(netIncome, totalEquity) * 100,
+      // ROE 在股東權益為負（庫藏股過多）時無意義，設為 0 避免 -inf/-700% 等怪值
+      roe: (totalEquity > 0) ? safeDiv(netIncome, totalEquity) * 100 : 0,
       roa: safeDiv(netIncome, totalAssets) * 100,
       debtToEquity: safeDiv(totalLiabilities, totalEquity) * 100,
       currentRatio: totalCurrentLiabilities > 0

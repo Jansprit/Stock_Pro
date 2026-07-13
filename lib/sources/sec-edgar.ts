@@ -73,6 +73,27 @@ export interface SecFundamentals {
   sharesOutstanding?: number;
 }
 
+/** 多年期歷史財報（給 financial trends 圖用） */
+export interface SecFinancialHistory {
+  cik: number;
+  entityName: string;
+  /** 每年的關鍵指標（西元年） */
+  years: Array<{
+    year: number;            // 西元年（如 2024）
+    fiscalEnd: string;       // 財報截止日（YYYY-MM-DD）
+    revenue?: number;        // 營收
+    grossProfit?: number;    // 毛利
+    operatingIncome?: number;
+    netIncome?: number;
+    eps?: number;            // 每股盈餘
+    totalAssets?: number;
+    totalEquity?: number;
+    totalLiabilities?: number;
+    operatingCashFlow?: number;
+    capex?: number;
+  }>;
+}
+
 // ========== 內部：解析最新一期 ==========
 
 function latestVal(
@@ -201,6 +222,131 @@ function parseSecFacts(data: SecCompanyFacts): SecFundamentals {
   if (shares) out.sharesOutstanding = shares.val;
 
   return out;
+}
+
+// ========== 多年期歷史（給財務趨勢圖用） ==========
+
+/** 從 SEC companyfacts 抽出「每個西曆年」的彙總（10-K 全年值，非單季） */
+function pickAnnualHistory(
+  concept: SecFactConcept | undefined,
+  unit = 'USD',
+): Array<{ year: number; val: number; end: string }> {
+  if (!concept || !concept.units[unit]) return [];
+  const series = concept.units[unit];
+  // 只挑 10-K / 10-K/A 的全年值（fp='FY' 且 frame 是 CYxxxx，沒有 Q 後綴）
+  // frame: 'CY2024' = 全年；'CY2024Q1/Q2/Q3' = 單季（誤標 fp='FY'）
+  const annual = series.filter(
+    (s) =>
+      s.fp === 'FY' &&
+      (s.form === '10-K' || s.form === '10-K/A') &&
+      typeof s.frame === 'string' &&
+      /^CY\d{4}$/.test(s.frame),
+  );
+  // 每個 end-date 取最新一筆（10-K 改訂過的話）
+  const byYear = new Map<number, { val: number; end: string }>();
+  for (const s of annual) {
+    const year = new Date(s.end).getFullYear();
+    const existing = byYear.get(year);
+    if (!existing || s.end > existing.end) {
+      byYear.set(year, { val: s.val, end: s.end });
+    }
+  }
+  return Array.from(byYear.entries())
+    .map(([year, v]) => ({ year, val: v.val, end: v.end }))
+    .sort((a, b) => a.year - b.year);
+}
+
+/** 多概念合併抓歷史：AAPL 的 Revenues 只有舊年份，新年份在
+ *  RevenueFromContractWithCustomerExcludingAssessedTax — 必須合併所有候選 concept */
+function pickMergedAnnualHistory(
+  facts: SecCompanyFacts,
+  conceptNames: string[],
+  unit = 'USD',
+): Array<{ year: number; val: number; end: string }> {
+  const merged = new Map<number, { val: number; end: string }>();
+  for (const name of conceptNames) {
+    const concept = pickAnyConcept(facts, name);
+    for (const e of pickAnnualHistory(concept, unit)) {
+      const existing = merged.get(e.year);
+      if (!existing || e.end > existing.end) {
+        merged.set(e.year, { val: e.val, end: e.end });
+      }
+    }
+  }
+  return Array.from(merged.entries())
+    .map(([year, v]) => ({ year, val: v.val, end: v.end }))
+    .sort((a, b) => a.year - b.year);
+}
+
+/**
+ * 抓 SEC companyfacts，整理成 5 年年度歷史財報
+ *
+ * 注意：免費、無 rate limit，但官方 User-Agent 政策要求 email 格式
+ *
+ * @param cik SEC 中央索引鍵
+ * @param years 取幾年（預設 5）
+ */
+export async function fetchSecFinancialHistory(
+  cik: number,
+  years = 5,
+): Promise<SecFinancialHistory | null> {
+  return cached(`sec:history:v4:${cik}:${years}`, TTL, async () => {
+    const cikPadded = String(cik).padStart(10, '0');
+    const url = `${BASE_URL}/api/xbrl/companyfacts/CIK${cikPadded}.json`;
+    try {
+      const res = await fetch(url, { headers: HEADERS, cache: 'no-store' });
+      if (!res.ok) {
+        console.warn(`[sec] companyfacts CIK${cikPadded}: HTTP ${res.status}`);
+        return null;
+      }
+      const data = (await res.json()) as SecCompanyFacts;
+      const revHistory = pickMergedAnnualHistory(data, ['Revenues', 'RevenueFromContractWithCustomerExcludingAssessedTax', 'RevenueFromContractWithCustomerIncludingAssessedTax', 'SalesRevenueNet'], 'USD');
+      const gpHistory = pickMergedAnnualHistory(data, ['GrossProfit'], 'USD');
+      const opHistory = pickMergedAnnualHistory(data, ['OperatingIncomeLoss'], 'USD');
+      const niHistory = pickMergedAnnualHistory(data, ['NetIncomeLoss', 'ProfitLoss'], 'USD');
+      const epsHistory = pickAnnualHistory(pickAnyConcept(data, 'EarningsPerShareDiluted', 'EarningsPerShareBasic'), 'USD/shares');
+      const taHistory = pickMergedAnnualHistory(data, ['Assets'], 'USD');
+      const teHistory = pickMergedAnnualHistory(data, ['StockholdersEquity', 'StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest'], 'USD');
+      const tlHistory = pickMergedAnnualHistory(data, ['Liabilities'], 'USD');
+      const cfoHistory = pickMergedAnnualHistory(data, ['NetCashProvidedByUsedInOperatingActivities'], 'USD');
+      const capexHistory = pickMergedAnnualHistory(data, ['PaymentsToAcquirePropertyPlantAndEquipment'], 'USD');
+
+      // 取所有 year 的 union
+      const yearSet = new Set<number>();
+      for (const h of [revHistory, gpHistory, opHistory, niHistory, epsHistory, taHistory, teHistory, tlHistory, cfoHistory, capexHistory]) {
+        for (const e of h) yearSet.add(e.year);
+      }
+      const allYears = Array.from(yearSet).sort((a, b) => b - a).slice(0, years);
+
+      const findVal = (h: Array<{ year: number; val: number; end: string }>, y: number) => h.find((e) => e.year === y)?.val;
+      const findEnd = (h: Array<{ year: number; val: number; end: string }>, y: number) => h.find((e) => e.year === y)?.end ?? `${y}-12-31`;
+
+      const out: SecFinancialHistory = {
+        cik: data.cik,
+        entityName: data.entityName,
+        years: allYears
+          .sort((a, b) => a - b)
+          .map((y) => ({
+            year: y,
+            fiscalEnd: findEnd(revHistory, y) || findEnd(niHistory, y),
+            revenue: findVal(revHistory, y),
+            grossProfit: findVal(gpHistory, y),
+            operatingIncome: findVal(opHistory, y),
+            netIncome: findVal(niHistory, y),
+            eps: findVal(epsHistory, y),
+            totalAssets: findVal(taHistory, y),
+            totalEquity: findVal(teHistory, y),
+            totalLiabilities: findVal(tlHistory, y),
+            operatingCashFlow: findVal(cfoHistory, y),
+            capex: findVal(capexHistory, y),
+          })),
+      };
+      return out;
+    } catch (e) {
+      console.warn(`[sec] companyfacts CIK${cik} history failed:`, e instanceof Error ? e.message : e);
+      return null;
+    }
+  });
 }
 
 /** 判斷是否啟用 SEC EDGAR（始終免費，但需要 User-Agent 政策合規） */

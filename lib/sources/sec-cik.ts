@@ -26,7 +26,7 @@ interface SecTickerEntry {
 type SecTickerMap = Record<string, SecTickerEntry>;
 
 async function fetchTickerMap(): Promise<SecTickerMap | null> {
-  return cached('sec:ticker-map', TTL, async () => {
+  return cached('sec:ticker-map:v2', TTL, async () => {
     try {
       const res = await fetch('https://www.sec.gov/files/company_tickers.json', {
         headers: HEADERS,
@@ -53,10 +53,31 @@ async function fetchTickerMap(): Promise<SecTickerMap | null> {
 export async function lookupCikByTicker(symbol: string): Promise<number | null> {
   const map = await fetchTickerMap();
   if (!map) return null;
-  const target = symbol.toUpperCase();
-  // JSON keys are numeric strings "0", "1", ...
+  const target = symbol.toUpperCase().replace(/\.(TW|TWO)$/i, '');
+
+  // 1. 直接對應（精確比對）
   for (const entry of Object.values(map)) {
-    if (entry.ticker.toUpperCase() === target) return entry.cik_str;
+    if (entry.ticker.toUpperCase() === target) {
+      // 但要排除常見的「同名陷阱」：例如 HP 對到 Helmerich & Payne
+      // 而 HPQ 才對到 HP Inc. — Q-suffix ticker 通常是 NYSE/NASDAQ 的普通股
+      // 簡單啟發：若 ticker 只有 1-3 個字母，且 .Q/.X 版也在 map 裡，
+      //   優先選 .Q 版本（避免對到石油鑽探、礦業等小型同名公司）
+      const len = target.length;
+      if (len <= 3 && !target.endsWith('Q')) {
+        const qVer = `${target}Q`;
+        const qHit = Object.values(map).find((e) => e.ticker.toUpperCase() === qVer);
+        if (qHit) return qHit.cik_str;
+      }
+      return entry.cik_str;
+    }
   }
+
+  // 2. 退路：嘗試加 .Q 後綴
+  if (!target.endsWith('Q')) {
+    for (const entry of Object.values(map)) {
+      if (entry.ticker.toUpperCase() === `${target}Q`) return entry.cik_str;
+    }
+  }
+
   return null;
 }
