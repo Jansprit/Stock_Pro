@@ -5,6 +5,26 @@
 
 ---
 
+## [0.5.2] - 2026-07-15 — 2342.TW 競爭對手兩階段 fetch
+
+### Fixed
+
+- **2342.TW 第一次查詢仍顯示「無競爭對手資料」**：
+  - 修完 0.5.1 industry 補抓後 server 端回 10 家沒問題，但 **client 端 30s QUICK_TIMEOUT 太短** — Goodinfo cold start 33s 還沒回，client 就 abort
+  - 即使 abort 後 server 才回 10 家，client 端 `setState` 沒補 competitors 補丁（之前只有 financials 補丁），所以 UI 永遠停在 placeholder
+  - 修法：competitors API 拆兩階段
+    - `?phase=industry`（≤7s）— 只跑 seeds + Fallback A，回美股 5 家
+    - `?phase=twse`（≤30s）— 只跑 Goodinfo 補台股 5 家
+  - 頁面渲染後另觸發 phase=twse，回來時 setState 補上
+
+### Changed
+
+- `app/api/competitors/[symbol]/route.ts` — 加 `phase` query param 支援
+- `app/page.tsx` — 第一階段用 `?phase=industry`，渲染後另觸發 `?phase=twse` 補台股
+- `package.json` version 0.5.1 → 0.5.2
+
+---
+
 ## [0.5.1] - 2026-07-15 — 2342.TW 競爭對手修正
 
 ### Fixed

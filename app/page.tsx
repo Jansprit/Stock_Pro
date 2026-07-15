@@ -28,6 +28,11 @@ export default function HomePage() {
   });
 
   const loadStock = useCallback(async (symbol: string, isRefresh = false) => {
+    // 防止 mobile Enter 鍵 / 重複點擊造成同 symbol 並行 fetch（會看到頁面渲染兩次）
+    if (!isRefresh && state.loading && state.data?.overview.symbol === symbol.toUpperCase()) {
+      console.log(`[page] ${symbol} already loading, skip duplicate call`);
+      return;
+    }
     setState((s) => ({
       loading: true,
       error: null,
@@ -73,13 +78,16 @@ export default function HomePage() {
       }
       const overview = overviewRes.value.overview;
 
-      // 並行抓剩餘 4 個（chart/news/competitors 用 QUICK_TIMEOUT，financials 用 SLOW_TIMEOUT）
-      // 先抓快的 3 個（chart/news/competitors），完成後立刻 setState 讓 dashboard 渲染
-      // financials 慢也無所謂 — 之後再 setState 補上
+      // 並行抓剩餘 3 個（chart/news/competitors 用 QUICK_TIMEOUT，financials 用 SLOW_TIMEOUT）
+      // 兩階段 fetch 設計（v0.5.2）：
+      //   1) competitors 用 ?phase=industry ≤3s 只回美股 industry-fallback 5 家
+      //   2) 渲染後另觸發 ?phase=twse ≤30s 補台股 Goodinfo 5 家
+      // 解決 2342.TW 第一次查詢顯示「無競爭對手」（Goodinfo 30s cold start 超過 client 30s timeout）
       const [chartRes, newsRes, competitorsRes] = await Promise.allSettled([
         fetchWithTimeout(`/api/chart/${encodeURIComponent(symbol)}?range=1Y`, QUICK_TIMEOUT),
         fetchWithTimeout(`/api/news/${encodeURIComponent(symbol)}`, QUICK_TIMEOUT),
-        fetchWithTimeout(`/api/competitors/${encodeURIComponent(symbol)}`, QUICK_TIMEOUT),
+        // phase=industry 只跑 industry-fallback（≤3s），不觸發 30s 的 Goodinfo
+        fetchWithTimeout(`/api/competitors/${encodeURIComponent(symbol)}?phase=industry`, QUICK_TIMEOUT),
       ]);
 
       const chartPoints = chartRes.status === 'fulfilled' && !chartRes.value?.error
@@ -122,6 +130,17 @@ export default function HomePage() {
 
       // 把 financials 補上（不重新 setState 整個 data，避免 re-render 其他區塊）
       setState((s) => s.data ? { ...s, data: { ...s.data, financials } } : s);
+
+      // 第二階段：抓 Goodinfo 補台股同業（≤30s）
+      // 失敗 / 超時不影響主流程，UI 仍可看美股 5 家
+      try {
+        const twseRes = await fetchWithTimeout(`/api/competitors/${encodeURIComponent(symbol)}?phase=twse`, SLOW_TIMEOUT);
+        if (twseRes && !twseRes.error && Array.isArray(twseRes.competitors) && twseRes.competitors.length > 0) {
+          setState((s) => s.data ? { ...s, data: { ...s.data, competitors: twseRes } } : s);
+        }
+      } catch (e) {
+        console.warn('[page] twse competitors 超時或失敗，UI 維持美股同業:', e instanceof Error ? e.message : e);
+      }
 
       // 再呼叫 AI 報告（非阻塞，但載入指示）
       try {
@@ -203,6 +222,15 @@ export default function HomePage() {
                   fetchedAt: new Date().toISOString(),
                 }
               : null,
+          }));
+        } else {
+          // 既沒 error 也沒 report — API 回怪 response。明確 setState 結束 loading 狀態，
+          // 否則 Dashboard 的 conditional render 會走 null 分支，整個 AI 區塊消失
+          console.warn('[ai-report] unexpected response:', aiData);
+          setState((s) => ({
+            ...s,
+            aiError: 'AI 報告回應格式異常，請稍後重試',
+            aiLoading: false,
           }));
         }
       } catch (err) {

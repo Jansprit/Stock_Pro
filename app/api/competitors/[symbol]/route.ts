@@ -10,10 +10,16 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: { symbol: string } },
 ) {
   const symbol = decodeURIComponent(params.symbol).trim();
+  // 兩階段 fetch 支援：
+  //   ?phase=industry（≤3s）— 只跑 industry-fallback（美股 5 家）
+  //   ?phase=twse（≤30s）— 只跑 Goodinfo 補台股 5 家
+  // 不帶 phase → 跑完整 chain（向後相容）
+  const { searchParams } = new URL(request.url);
+  const phase = searchParams.get('phase') as 'industry' | 'twse' | null;
 
   if (!symbol) {
     return NextResponse.json<ApiError>({
@@ -25,6 +31,18 @@ export async function GET(
   // 預設 seed（hardcoded 主流清單）：先拿這個
   const seeds = getCompetitorsForSymbol(symbol);
   let competitors: Competitor[] = [];
+
+  // 兩階段 fetch 支援：
+  //   ?phase=industry（≤3s）— 只跑 seeds + Fallback A，跳過 Goodinfo
+  //   ?phase=twse（≤30s）— 只跑 Goodinfo 補台股同業（直接走 Goodinfo 區塊）
+  if (phase === 'twse') {
+    const twsePeers = await fetchTwsePeersOnly(symbol);
+    return NextResponse.json<CompetitorData>({
+      competitors: twsePeers ?? [],
+      aiSummary: '',
+    });
+  }
+  const skipGoodinfo = phase === 'industry';
 
   if (seeds.length > 0 && hasCompetitorTable(symbol)) {
     try {
@@ -125,59 +143,60 @@ export async function GET(
   // 補充：Goodinfo 同業清單（台股限定）。對 ETF（industry=ETF 或 symbol 開頭 00）跳過，
   // 因為 ETF 沒有「同產業個股」概念，與其花 10+ 秒等 Playwright cold start 最後回傳空，
   // 不如直接讓 fallback chain 用 Yahoo industry 對應的 INDUSTRY_PEERS（如 0050/00878 ETF 比照）
-  // 同時讓 getCompetitorMetrics 跳過（避免又去抓每檔 peer 的 metrics）
+  // 兩階段 fetch：phase=industry 跳過 Goodinfo（≤3s 回美股 5 家）；其他走完整 chain
   let twseIndustry: string | null = null;
   const isEtf = symbol.startsWith('00') && (symbol.endsWith('.TW') || symbol.endsWith('.TWO'));
-  // 對 ETF 跳過 Goodinfo，但走 INDUSTRY_PEERS 的 ETF fallback（已內建在 competitors route 前段）
-  try {
-    const isTw = /\.(TW|TWO)$/i.test(symbol);
-    const avail = goodinfoAvailable();
-    if (isTw && avail && !isEtf) {
-      const result = await fetchGoodinfoPeersForSymbol(symbol, 10);
-      twseIndustry = result.twseIndustry;
-      console.log(`[competitors] goodinfo: ${symbol} -> ${result.peers.length} peers, industry=${twseIndustry ?? 'none'}`);
+  if (!skipGoodinfo) {
+    try {
+      const isTw = /\.(TW|TWO)$/i.test(symbol);
+      const avail = goodinfoAvailable();
+      if (isTw && avail && !isEtf) {
+        const result = await fetchGoodinfoPeersForSymbol(symbol, 10);
+        twseIndustry = result.twseIndustry;
+        console.log(`[competitors] goodinfo: ${symbol} -> ${result.peers.length} peers, industry=${twseIndustry ?? 'none'}`);
 
-      // 從 Goodinfo 補同業（5 家上限）
-      const goodinfoPeers = result.peers
-        .filter((p) => !competitors.find((c) => c.symbol === p.symbol))
-        .slice(0, 5);
+        // 從 Goodinfo 補同業（5 家上限）
+        const goodinfoPeers = result.peers
+          .filter((p) => !competitors.find((c) => c.symbol === p.symbol))
+          .slice(0, 5);
 
-      if (goodinfoPeers.length > 0) {
-        // 嘗試補 indicators：從 Goodinfo 拿到的 PE 直接用；其他欄位試 Yahoo
-        let metrics: Map<string, Partial<Competitor>> = new Map();
-        try {
-          metrics = await getCompetitorMetrics(goodinfoPeers.map((p) => p.symbol));
-        } catch {
-          // 忽略，繼續只用 Goodinfo 指標
-        }
-        for (const p of goodinfoPeers) {
-          // 注意：優先用 Goodinfo 的即時 PE / PB / price（Yahoo 對中小股常回空或錯值）
-          const m = metrics.get(p.symbol) ?? ({} as Partial<Competitor>);
-          const peer: Competitor = {
-            symbol: p.symbol,
-            name: p.name,
-            marketPosition: `同屬「${twseIndustry ?? '未分類'}」產業（Goodinfo 來源）`,
-            coreStrength: '',
-            coreRisk: '',
-            source: 'goodinfo',
-            // Goodinfo PE / PB / price 為主要來源（empty 才 fallback Yahoo）
-            pe: p.pe ?? m.pe,
-            pb: p.pb ?? m.pb,
-            price: p.price ?? m.price,
-            // 其他欄位（Yahoo 比較有值）才用 Yahoo fallback
-            ...(m.marketCap !== undefined && { marketCap: m.marketCap }),
-            ...(m.grossMargin !== undefined && { grossMargin: m.grossMargin }),
-            ...(m.netMargin !== undefined && { netMargin: m.netMargin }),
-            ...(m.eps !== undefined && { eps: m.eps }),
-            ...(m.roe !== undefined && { roe: m.roe }),
-            ...(m.dividendYield !== undefined && { dividendYield: m.dividendYield }),
-          };
-          competitors.push(peer);
+        if (goodinfoPeers.length > 0) {
+          // 嘗試補 indicators：從 Goodinfo 拿到的 PE 直接用；其他欄位試 Yahoo
+          let metrics: Map<string, Partial<Competitor>> = new Map();
+          try {
+            metrics = await getCompetitorMetrics(goodinfoPeers.map((p) => p.symbol));
+          } catch {
+            // 忽略，繼續只用 Goodinfo 指標
+          }
+          for (const p of goodinfoPeers) {
+            // 注意：優先用 Goodinfo 的即時 PE / PB / price（Yahoo 對中小股常回空或錯值）
+            const m = metrics.get(p.symbol) ?? ({} as Partial<Competitor>);
+            const peer: Competitor = {
+              symbol: p.symbol,
+              name: p.name,
+              marketPosition: `同屬「${twseIndustry ?? '未分類'}」產業（Goodinfo 來源）`,
+              coreStrength: '',
+              coreRisk: '',
+              source: 'goodinfo',
+              // Goodinfo PE / PB / price 為主要來源（empty 才 fallback Yahoo）
+              pe: p.pe ?? m.pe,
+              pb: p.pb ?? m.pb,
+              price: p.price ?? m.price,
+              // 其他欄位（Yahoo 比較有值）才用 Yahoo fallback
+              ...(m.marketCap !== undefined && { marketCap: m.marketCap }),
+              ...(m.grossMargin !== undefined && { grossMargin: m.grossMargin }),
+              ...(m.netMargin !== undefined && { netMargin: m.netMargin }),
+              ...(m.eps !== undefined && { eps: m.eps }),
+              ...(m.roe !== undefined && { roe: m.roe }),
+              ...(m.dividendYield !== undefined && { dividendYield: m.dividendYield }),
+            };
+            competitors.push(peer);
+          }
         }
       }
+    } catch (err) {
+      console.warn('[competitors] goodinfo fallback skipped:', err);
     }
-  } catch (err) {
-    console.warn('[competitors] goodinfo fallback skipped:', err);
   }
 
   if (competitors.length === 0) {
@@ -195,4 +214,53 @@ export async function GET(
     competitors,
     aiSummary: '',
   });
+}
+
+/**
+ * 第二階段專用：只跑 Goodinfo 補台股同業（≤30s）
+ * 直接走 Goodinfo 區塊，不跑 seeds / Fallback A
+ */
+async function fetchTwsePeersOnly(symbol: string): Promise<Competitor[] | null> {
+  const isTw = /\.(TW|TWO)$/i.test(symbol);
+  const isEtf = symbol.startsWith('00') && (symbol.endsWith('.TW') || symbol.endsWith('.TWO'));
+  const avail = goodinfoAvailable();
+  if (!isTw || !avail || isEtf) return null;
+
+  try {
+    const result = await fetchGoodinfoPeersForSymbol(symbol, 10);
+    console.log(`[competitors] twse phase: ${symbol} -> ${result.peers.length} peers, industry=${result.twseIndustry ?? 'none'}`);
+
+    const goodinfoPeers = result.peers.slice(0, 5);
+    if (goodinfoPeers.length === 0) return [];
+
+    let metrics: Map<string, Partial<Competitor>> = new Map();
+    try {
+      metrics = await getCompetitorMetrics(goodinfoPeers.map((p) => p.symbol));
+    } catch {
+      // 忽略
+    }
+    return goodinfoPeers.map((p) => {
+      const m = metrics.get(p.symbol) ?? ({} as Partial<Competitor>);
+      return {
+        symbol: p.symbol,
+        name: p.name,
+        marketPosition: `同屬「${result.twseIndustry ?? '未分類'}」產業（Goodinfo 來源）`,
+        coreStrength: '',
+        coreRisk: '',
+        source: 'goodinfo',
+        pe: p.pe ?? m.pe,
+        pb: p.pb ?? m.pb,
+        price: p.price ?? m.price,
+        ...(m.marketCap !== undefined && { marketCap: m.marketCap }),
+        ...(m.grossMargin !== undefined && { grossMargin: m.grossMargin }),
+        ...(m.netMargin !== undefined && { netMargin: m.netMargin }),
+        ...(m.eps !== undefined && { eps: m.eps }),
+        ...(m.roe !== undefined && { roe: m.roe }),
+        ...(m.dividendYield !== undefined && { dividendYield: m.dividendYield }),
+      } as Competitor;
+    });
+  } catch (err) {
+    console.warn('[competitors] twse phase failed:', err);
+    return null;
+  }
 }
