@@ -99,13 +99,15 @@ export default function HomePage() {
       const competitors = competitorsRes.status === 'fulfilled' && !competitorsRes.value?.error
         ? competitorsRes.value
         : { competitors: [], aiSummary: '' };
+      // 預先宣告 financials（先用空年報，AI 報告先用空年報，後面再補）
+      let financials: { symbol: string; currency: string; years: FinancialYear[] } = { symbol, currency: overview.currency, years: [] };
 
       // 先設定基本資料（不含 financials / AI 報告），UI 可以馬上渲染
       setState({
         loading: false,
         error: null,
         aiError: null,
-        aiLoading: true,
+        aiLoading: true, // 標記 AI 報告開始生成
         data: {
           overview,
           financials: { symbol, currency: overview.currency, years: [] }, // 先用空財報
@@ -117,32 +119,9 @@ export default function HomePage() {
         },
       });
 
-      // financials 單獨慢抓（不阻塞主要渲染）。失敗 / 超時就用空財報，UI 顯示「無財報」
-      let financials: { symbol: string; currency: string; years: FinancialYear[] } = { symbol, currency: overview.currency, years: [] };
-      try {
-        const finRes = await fetchWithTimeout(`/api/financials/${encodeURIComponent(symbol)}`, SLOW_TIMEOUT);
-        if (finRes && !finRes.error && finRes.financials) {
-          financials = finRes.financials as { symbol: string; currency: string; years: FinancialYear[] };
-        }
-      } catch (e) {
-        console.warn('[page] financials 超時或失敗，UI 將顯示「無財報」:', e instanceof Error ? e.message : e);
-      }
-
-      // 把 financials 補上（不重新 setState 整個 data，避免 re-render 其他區塊）
-      setState((s) => s.data ? { ...s, data: { ...s.data, financials } } : s);
-
-      // 第二階段：抓 Goodinfo 補台股同業（≤30s）
-      // 失敗 / 超時不影響主流程，UI 仍可看美股 5 家
-      try {
-        const twseRes = await fetchWithTimeout(`/api/competitors/${encodeURIComponent(symbol)}?phase=twse`, SLOW_TIMEOUT);
-        if (twseRes && !twseRes.error && Array.isArray(twseRes.competitors) && twseRes.competitors.length > 0) {
-          setState((s) => s.data ? { ...s, data: { ...s.data, competitors: twseRes } } : s);
-        }
-      } catch (e) {
-        console.warn('[page] twse competitors 超時或失敗，UI 維持美股同業:', e instanceof Error ? e.message : e);
-      }
-
-      // 再呼叫 AI 報告（非阻塞，但載入指示）
+      // 立即觸發 AI 報告（v0.5.3 修正：不要等 financials 與 twse 補丁，60s timeout 內就觸發）
+      // body 用第一階段的 competitors（5 美股）即可 — AI 報告需要的是「同產業對手」概念
+      // 而非精確個股對標
       try {
         const aiRes = await fetch('/api/ai-report', {
           method: 'POST',
@@ -236,6 +215,28 @@ export default function HomePage() {
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'AI 分析失敗';
         setState((s) => ({ ...s, aiError: msg, aiLoading: false }));
+      }
+
+      // financials 單獨慢抓（不阻塞主要渲染與 AI 報告）。失敗 / 超時就用空財報，UI 顯示「無財報」
+      try {
+        const finRes = await fetchWithTimeout(`/api/financials/${encodeURIComponent(symbol)}`, SLOW_TIMEOUT);
+        if (finRes && !finRes.error && finRes.financials) {
+          financials = finRes.financials as { symbol: string; currency: string; years: FinancialYear[] };
+        }
+      } catch (e) {
+        console.warn('[page] financials 超時或失敗，UI 將顯示「無財報」:', e instanceof Error ? e.message : e);
+      }
+      // 把 financials 補上（不重新 setState 整個 data，避免 re-render 其他區塊）
+      setState((s) => s.data ? { ...s, data: { ...s.data, financials } } : s);
+
+      // 第二階段：抓 Goodinfo 補台股同業（≤30s）。失敗 / 超時不影響主流程，UI 仍可看美股 5 家
+      try {
+        const twseRes = await fetchWithTimeout(`/api/competitors/${encodeURIComponent(symbol)}?phase=twse`, SLOW_TIMEOUT);
+        if (twseRes && !twseRes.error && Array.isArray(twseRes.competitors) && twseRes.competitors.length > 0) {
+          setState((s) => s.data ? { ...s, data: { ...s.data, competitors: twseRes } } : s);
+        }
+      } catch (e) {
+        console.warn('[page] twse competitors 超時或失敗，UI 維持美股同業:', e instanceof Error ? e.message : e);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : '載入發生錯誤';

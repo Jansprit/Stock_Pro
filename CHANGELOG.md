@@ -5,6 +5,23 @@
 
 ---
 
+## [0.5.3] - 2026-07-15 — AI 報告觸發時機修正
+
+### Fixed
+
+- **AI 報告在手機上永遠等不到**：
+  - root cause：`page.tsx` 把 `await fetch('/api/ai-report')` 排在所有資料流後（financials 60s + twse 補丁 60s 之後），最壞 210s 才觸發
+  - 修法：AI 報告在第一階段 setState 後立即觸發（與其他 4 個 fetch 並行），不需等 financials 與 twse 補丁
+  - body 用第一階段的 5 美股 competitors（AI 報告需要的是「同產業對手」概念，非精確個股對標）
+  - 驗證：mobile cold start 後 AI 報告在 t=30s 已觸發，t=110s 完整渲染（v0.5.2 是「永遠等不到」）
+
+### Changed
+
+- `app/page.tsx` — AI 報告 fetch 移到 setState 立即觸發；financials 與 twse 補丁移到 AI 報告 catch 之後
+- `package.json` version 0.5.2 → 0.5.3
+
+---
+
 ## [0.5.2] - 2026-07-15 — 2342.TW 競爭對手兩階段 fetch
 
 ### Fixed
