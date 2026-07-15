@@ -5,6 +5,21 @@
 
 ---
 
+## [0.5.1] - 2026-07-15 — 2342.TW 競爭對手修正
+
+### Fixed
+
+- **2342.TW 等台股個股第一次查詢「無競爭對手資料」**：
+  - `getBestQuoteAndMeta` 對台股走 TWSE MIS 路徑，但 `misQuoteToOverview` 的 `industry / sector` 寫死空字串 → competitors route 拿不到 industry → Fallback A 跳過 INDUSTRY_PEERS
+  - 修法：MIS 成功後呼叫 `fetchYahooQuoteSummary` 補 sector/industry（≤3s，try-catch 失敗不影響主流程）
+  - 驗證：2342.TW overview 現正確回 `industry="Semiconductors" / sector="Technology"`，competitors 從 5 家 → 10 家（5 美股 + 5 台股）
+
+### Changed
+
+- `package.json` version 0.5.0 → 0.5.1
+
+---
+
 ## [0.5.0] - 2026-07-15 — 重大里程碑（multiple bug fix + 動態競爭對手 + ETF 效能）
 
 本版本累積多項獨立修正與能力升級，標記為使用者要求的重要回溯點。

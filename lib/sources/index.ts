@@ -163,6 +163,16 @@ async function fetchBestQuoteAndMeta(symbol: string): Promise<{
         ? await withRetry('twse.tpexKLine', () => twse.fetchTpexKLine(rawSymbol, '1Y'))
         : await withRetry('twse.kLine', () => twse.fetchTwseKLine(rawSymbol, '1Y'));
 
+      // 台股補 industry/sector：MIS 不含這欄位，競爭對手 fallback chain 仰賴此欄位
+      // 改用 Yahoo v10 quoteSummary 的 assetProfile（≤3s，含 cookie/crumb 兩步握手）
+      try {
+        const qs = await fetchYahooQuoteSummary(fullSymbol);
+        if (qs?.sector) ov.sector = qs.sector;
+        if (qs?.industry) ov.industry = qs.industry;
+      } catch {
+        // 即使失敗也不影響 MIS 報價主流程
+      }
+
       // 用 return 時在 symbol 欄位塞 fullSymbol（呼叫端會用 quoteMeta.symbol 當 usedSymbol）
       return { meta: { ...ov, symbol: fullSymbol }, chartPoints: kline ?? [], range: '1Y' };
     }
