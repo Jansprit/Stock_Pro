@@ -86,7 +86,7 @@ export const buildMainPrompt = {
     }).join('\n');
 
     const financialsTable = f.years.map((y) =>
-      `${y.year}年：營收 ${formatNum(y.revenue)}、毛利 ${y.grossMargin.toFixed(1)}%、淨利率 ${y.netMargin.toFixed(1)}%、ROE ${y.roe.toFixed(1)}%、負債比 ${y.debtToEquity.toFixed(1)}%、自由現金流 ${formatNum(y.freeCashFlow)}、EPS ${y.eps.toFixed(2)}`
+      `${y.year}年：營收 ${formatNum(y.revenue)}、毛利 ${y.grossMargin.toFixed(1)}%、淨利率 ${y.netMargin.toFixed(1)}%、ROE ${y.roe !== null ? y.roe.toFixed(1)+'%' : '不適用（股東權益為負）'}、負債比 ${y.debtToEquity !== null ? y.debtToEquity.toFixed(1)+'%' : '不適用'}、自由現金流 ${formatNum(y.freeCashFlow)}、EPS ${y.eps.toFixed(2)}`
     ).join('\n');
 
     // === 從 Goodinfo 來的台股補充欄位組裝 ===

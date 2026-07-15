@@ -41,8 +41,24 @@ export async function GET(
   //     但知道產業」的 case）。需先抓 overview 拿 industry 欄位。
   if (competitors.length === 0) {
     try {
-      const overview = await getStockOverview(symbol);
-      let industry = overview.industry || overview.sector;
+      // 對 ETF 直接早返回 — ETF 沒有「同產業個股」概念，與其跑完整 fallback chain（22s+）
+      // 不如告訴使用者「ETF 無同業比較」
+      const isEtf = symbol.startsWith('00') && (symbol.endsWith('.TW') || symbol.endsWith('.TWO'));
+      if (isEtf) {
+        return NextResponse.json<CompetitorData>({
+          competitors: [],
+          aiSummary: '此為 ETF（指數型基金），沒有「同產業個股」概念，故無競爭對手比較欄目。請查閱成分股或追蹤指數以了解其投資組合。',
+        });
+      }
+      // 只需拿 industry 欄位做 industry fallback。對台股用 TWSE MIS（≤1s），其他用 Yahoo v8/chart meta
+      let industry: string | undefined;
+      const isTw = symbol.endsWith('.TW') || symbol.endsWith('.TWO');
+      if (isTw) {
+        // 從 cached overview 抓 industry（已建好的快取；無 cache 時只跑輕量 TWSE MIS）
+        industry = await getStockOverview(symbol).then((o) => o.industry || o.sector).catch(() => undefined);
+      } else {
+        industry = await getStockOverview(symbol).then((o) => o.industry || o.sector).catch(() => undefined);
+      }
 
       // Fallback A-1：若 Yahoo v10 industry 太粗（如 'Technology'）找不到對應的 peer group，
       //     用 SEC submissions 的 SIC code（更精準的 4 位數字分類）→ 對應 SIC_TO_INDUSTRY map
@@ -106,12 +122,17 @@ export async function GET(
     }
   }
 
-  // 補充：Goodinfo 同業清單（台股限定），抓 TWSE 產業分類下的所有同業
+  // 補充：Goodinfo 同業清單（台股限定）。對 ETF（industry=ETF 或 symbol 開頭 00）跳過，
+  // 因為 ETF 沒有「同產業個股」概念，與其花 10+ 秒等 Playwright cold start 最後回傳空，
+  // 不如直接讓 fallback chain 用 Yahoo industry 對應的 INDUSTRY_PEERS（如 0050/00878 ETF 比照）
+  // 同時讓 getCompetitorMetrics 跳過（避免又去抓每檔 peer 的 metrics）
   let twseIndustry: string | null = null;
+  const isEtf = symbol.startsWith('00') && (symbol.endsWith('.TW') || symbol.endsWith('.TWO'));
+  // 對 ETF 跳過 Goodinfo，但走 INDUSTRY_PEERS 的 ETF fallback（已內建在 competitors route 前段）
   try {
     const isTw = /\.(TW|TWO)$/i.test(symbol);
     const avail = goodinfoAvailable();
-    if (isTw && avail) {
+    if (isTw && avail && !isEtf) {
       const result = await fetchGoodinfoPeersForSymbol(symbol, 10);
       twseIndustry = result.twseIndustry;
       console.log(`[competitors] goodinfo: ${symbol} -> ${result.peers.length} peers, industry=${twseIndustry ?? 'none'}`);

@@ -111,9 +111,12 @@ export interface FinancialYear {
   grossMargin: number;
   operatingMargin: number;
   netMargin: number;
-  roe: number;
-  roa: number;
-  debtToEquity: number;
+  /** ROE 在股東權益為負（庫藏股過多，如 HPQ）或無資料時為 null */
+  roe: number | null;
+  /** ROA 在資產為 0 或無資料時為 null */
+  roa: number | null;
+  /** Debt/Equity 在股東權益 ≤ 0 或無資料時為 null */
+  debtToEquity: number | null;
   priceToBook?: number;
   peRatio?: number;
   currentRatio?: number;

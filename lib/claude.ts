@@ -221,8 +221,8 @@ export interface AIGenerationInput {
       totalEquity: number;
       grossMargin: number;
       netMargin: number;
-      roe: number;
-      debtToEquity: number;
+      roe: number | null;
+      debtToEquity: number | null;
     }>;
   };
   news: Array<{

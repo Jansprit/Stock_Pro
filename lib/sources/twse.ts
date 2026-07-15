@@ -266,49 +266,56 @@ export async function fetchTwseKLine(rawSymbol: string, range: ChartRange): Prom
   startDate.setMonth(today.getMonth() - months);
 
   const out: PricePoint[] = [];
-  const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
 
+  // 並行抓每個月（原本 sequential 對 1Y 需 12 次 HTTP ≈ 18s → 並行後 < 3s）
+  // 注意：早期上市未滿 N 個月用 cursor 限制，所以這裡要列出所有月份再 filter
+  const monthList: string[] = [];
+  const cursorForList = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+  while (cursorForList <= today) {
+    const dateStr = `${cursorForList.getFullYear()}${String(cursorForList.getMonth() + 1).padStart(2, '0')}01`;
+    monthList.push(dateStr);
+    cursorForList.setMonth(cursorForList.getMonth() + 1);
+  }
+
+  // 並行抓每個月，但用 Promise.allSettled 避免單月失敗拖整體
+  const monthResults = await Promise.allSettled(
+    monthList.map(async (dateStr) => {
+      const url = `${TWSE_KLINE_URL}?response=json&date=${dateStr}&stockNo=${encodeURIComponent(rawSymbol)}`;
+      try {
+        const json = (await fetchJson(url)) as { stat?: string; data?: string[][] };
+        if (json?.stat === 'OK' && Array.isArray(json.data)) return json.data;
+        return null;
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  // 收集所有 rows（按時間順序）
   let consecutiveMiss = 0;
   const MAX_CONSECUTIVE_MISS = 2;
-
-  while (cursor <= today) {
-    const dateStr = `${cursor.getFullYear()}${String(cursor.getMonth() + 1).padStart(2, '0')}01`;
-    const url = `${TWSE_KLINE_URL}?response=json&date=${dateStr}&stockNo=${encodeURIComponent(rawSymbol)}`;
-    try {
-      const json = (await fetchJson(url)) as { stat?: string; data?: string[][] };
-      if (json?.stat === 'OK' && Array.isArray(json.data) && json.data.length > 0) {
-        consecutiveMiss = 0;
-        for (const row of json.data) {
-          // ["日期(115/07/01)", "成交股數", "成交金額", "開", "高", "低", "收", "漲跌", "筆數", "註記"]
-          const dateROC = row[0]; // '115/07/01'
-          const isoDate = rocDateToIso(dateROC);
-          if (!isoDate) continue;
-          // 排除「月平均收盤價」這種特殊 row
-          if (!/^\d{3}\/\d{2}\/\d{2}$/.test(dateROC)) continue;
-          // ETF 行欄位多一個「註記」，用 row.length 容忍；只讀固定位置
-          out.push({
-            date: isoDate,
-            open: parseNum(row[3]),
-            high: parseNum(row[4]),
-            low: parseNum(row[5]),
-            close: parseNum(row[6]),
-            volume: parseNum(row[1]),
-          });
-        }
-      } else {
-        // 該月無資料（新上市前、停牌、假日等）
-        consecutiveMiss++;
-        if (consecutiveMiss >= MAX_CONSECUTIVE_MISS) {
-          // 連續 2 個月沒資料就提早結束（多半是 symbol 上市未滿 N 個月）
-          break;
-        }
+  for (let i = 0; i < monthResults.length; i++) {
+    const r = monthResults[i]!;
+    if (r.status === 'fulfilled' && r.value && r.value.length > 0) {
+      consecutiveMiss = 0;
+      for (const row of r.value) {
+        const dateROC = row[0];
+        const isoDate = rocDateToIso(dateROC);
+        if (!isoDate) continue;
+        if (!/^\d{3}\/\d{2}\/\d{2}$/.test(dateROC)) continue;
+        out.push({
+          date: isoDate,
+          open: parseNum(row[3]),
+          high: parseNum(row[4]),
+          low: parseNum(row[5]),
+          close: parseNum(row[6]),
+          volume: parseNum(row[1]),
+        });
       }
-    } catch (e) {
-      // 某個月失敗就中斷，保留已抓到的部分
-      console.warn(`[twse] K-line ${dateStr} for ${rawSymbol} failed:`, e instanceof Error ? e.message : e);
-      break;
+    } else {
+      consecutiveMiss++;
+      if (consecutiveMiss >= MAX_CONSECUTIVE_MISS) break;
     }
-    cursor.setMonth(cursor.getMonth() + 1);
   }
 
   // 去重 + 排序 + 依範圍切片

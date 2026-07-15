@@ -1,7 +1,9 @@
 import { Github, ShieldAlert } from 'lucide-react';
+import packageInfo from '../../package.json';
 
 const REPO_URL = 'https://github.com/Jansprit/Stock_Pro';
-const APP_VERSION = '0.3.9';
+// 直接從 package.json 讀版本 — 之後升版只改 package.json 一行
+const APP_VERSION = packageInfo.version;
 
 export function Footer() {
   const releaseUrl = `${REPO_URL}/releases/tag/v${APP_VERSION}`;

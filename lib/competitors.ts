@@ -292,6 +292,69 @@ export const INDUSTRY_PEERS: Record<string, IndustryPeer[]> = {
     { symbol: 'VZ', name: 'Verizon', marketPosition: '美國最大電信', coreStrength: '頻譜資源', coreRisk: '競爭 + 利率', pe: 10, ps: 1.5, evEbitda: 7.5 },
     { symbol: 'TMUS', name: 'T-Mobile US', marketPosition: '美國電信 #3', coreStrength: '5G 領先', coreRisk: '客戶成長趨緩', pe: 23, ps: 2.7, evEbitda: 11 },
   ],
+  // 製藥（PFE / JNJ / MRK / LLY / ABBV / BMY / GSK / NVS / AZN）
+  'Pharmaceuticals': [
+    { symbol: 'JNJ', name: 'Johnson & Johnson', marketPosition: '多元製藥與醫材', coreStrength: '規模與多元化', coreRisk: 'Talc 訴訟', pe: 22, ps: 5, evEbitda: 14 },
+    { symbol: 'MRK', name: 'Merck & Co.', marketPosition: '製藥', coreStrength: 'Keytruda 免疫療法', coreRisk: 'Keytruda 專利到期 (2028)', pe: 16, ps: 4, evEbitda: 11 },
+    { symbol: 'LLY', name: 'Eli Lilly', marketPosition: '製藥、減肥藥', coreStrength: 'GLP-1 領導地位 (Zepbound/Mounjaro)', coreRisk: '估值極高', pe: 55, ps: 14, evEbitda: 35 },
+    { symbol: 'ABBV', name: 'AbbVie', marketPosition: '製藥', coreStrength: 'Humira 後繼者 (Skyrizi/Rinvoq)', coreRisk: 'Humira 衰退', pe: 15, ps: 4, evEbitda: 10 },
+    { symbol: 'BMY', name: 'Bristol-Myers Squibb', marketPosition: '製藥', coreStrength: '腫瘤與免疫', coreRisk: 'Eliquis 專利懸崖', pe: 12, ps: 3, evEbitda: 8 },
+    { symbol: 'GSK', name: 'GSK (ADR)', marketPosition: '製藥', coreStrength: '疫苗與愛滋病藥', coreRisk: '研發管線較弱', pe: 9, ps: 2, evEbitda: 6 },
+  ],
+  // 生物科技
+  'Biotechnology': [
+    { symbol: 'AMGN', name: 'Amgen', marketPosition: '生物製藥', coreStrength: '生物相似藥', coreRisk: '專利到期', pe: 18, ps: 5, evEbitda: 12 },
+    { symbol: 'GILD', name: 'Gilead Sciences', marketPosition: '抗病毒藥', coreStrength: 'HIV 領導地位', coreRisk: 'COVID 收入下滑', pe: 11, ps: 3.5, evEbitda: 8 },
+    { symbol: 'REGN', name: 'Regeneron', marketPosition: '生物製藥', coreStrength: 'Eylea 眼科', coreRisk: 'Eylea 競爭', pe: 22, ps: 5.5, evEbitda: 15 },
+    { symbol: 'VRTX', name: 'Vertex Pharmaceuticals', marketPosition: '罕見病藥', coreStrength: 'CF 囊狀纖維化領導', coreRisk: '管線集中', pe: 25, ps: 7, evEbitda: 18 },
+  ],
+  // 半導體
+  'Semiconductors': [
+    { symbol: 'NVDA', name: 'NVIDIA', marketPosition: 'GPU + AI 加速', coreStrength: 'AI 加速晶片領導', coreRisk: '客戶集中', pe: 50, ps: 25, evEbitda: 45 },
+    { symbol: 'AMD', name: 'Advanced Micro Devices', marketPosition: 'CPU + GPU', coreStrength: 'CPU 市占成長', coreRisk: '毛利率較低', pe: 45, ps: 8, evEbitda: 35 },
+    { symbol: 'INTC', name: 'Intel', marketPosition: 'IDM 半導體', coreStrength: 'x86 領導', coreRisk: '製程落後', pe: 0, ps: 2.5, evEbitda: 15 },
+    { symbol: 'TSM', name: 'TSMC (ADR)', marketPosition: '晶圓代工龍頭', coreStrength: '先進製程領導', coreRisk: '地緣政治', pe: 24, ps: 8, evEbitda: 14 },
+    { symbol: 'QCOM', name: 'Qualcomm', marketPosition: '行動晶片', coreStrength: '專利授權', coreRisk: '手機成長趨緩', pe: 18, ps: 4, evEbitda: 12 },
+  ],
+  // 大型銀行（JPM / BAC / WFC / C / GS / MS）
+  'Banks—Major': [
+    { symbol: 'BAC', name: 'Bank of America', marketPosition: '美國大型銀行', coreStrength: '零售銀行規模', coreRisk: '利率敏感', pe: 12, ps: 2.5, evEbitda: 0 },
+    { symbol: 'WFC', name: 'Wells Fargo', marketPosition: '美國大型銀行', coreStrength: '商業地產', coreRisk: '監管限制', pe: 11, ps: 2.2, evEbitda: 0 },
+    { symbol: 'C', name: 'Citigroup', marketPosition: '全球銀行', coreStrength: '國際業務', coreRisk: '轉型緩慢', pe: 9, ps: 1.5, evEbitda: 0 },
+    { symbol: 'GS', name: 'Goldman Sachs', marketPosition: '投資銀行', coreStrength: '交易與承銷', coreRisk: '週期性高', pe: 13, ps: 3, evEbitda: 0 },
+    { symbol: 'MS', name: 'Morgan Stanley', marketPosition: '投資銀行', coreStrength: '財富管理', coreRisk: '市場波動', pe: 13, ps: 3, evEbitda: 0 },
+  ],
+  // 石油天然氣（XOM / CVX / COP / SLB / EOG）
+  'Oil & Gas': [
+    { symbol: 'CVX', name: 'Chevron', marketPosition: '綜合石油', coreStrength: '上游 + 整合', coreRisk: '能源轉型', pe: 14, ps: 1.4, evEbitda: 6 },
+    { symbol: 'COP', name: 'ConocoPhillips', marketPosition: 'E&P 上游', coreStrength: '低成本儲量', coreRisk: '油價波動', pe: 12, ps: 1.8, evEbitda: 5 },
+    { symbol: 'SLB', name: 'Schlumberger', marketPosition: '油田服務', coreStrength: '技術領先', coreRisk: '北美客戶資本支出', pe: 13, ps: 2.2, evEbitda: 7 },
+    { symbol: 'EOG', name: 'EOG Resources', marketPosition: 'E&P 上游', coreStrength: '頁岩油領導', coreRisk: '油價', pe: 11, ps: 1.8, evEbitda: 4 },
+    { symbol: 'OXY', name: 'Occidental Petroleum', marketPosition: 'E&P + 化學', coreStrength: '美國低成本儲量', coreRisk: '高負債', pe: 13, ps: 1.5, evEbitda: 5 },
+  ],
+  // 零售（WMT / COST / TGT / HD / LOW）
+  'Retail': [
+    { symbol: 'WMT', name: 'Walmart', marketPosition: '全球最大零售商', coreStrength: '規模 + 供應鏈', coreRisk: '電商競爭', pe: 35, ps: 1.1, evEbitda: 18 },
+    { symbol: 'COST', name: 'Costco', marketPosition: '會員倉儲零售', coreStrength: '會員黏性', coreRisk: '估值偏高', pe: 50, ps: 1.4, evEbitda: 30 },
+    { symbol: 'TGT', name: 'Target', marketPosition: '大型綜合零售', coreStrength: '自有品牌', coreRisk: '同店銷售下滑', pe: 16, ps: 0.6, evEbitda: 8 },
+    { symbol: 'HD', name: 'Home Depot', marketPosition: '家居建材零售', coreStrength: 'Pro 客戶', coreRisk: '房市降溫', pe: 24, ps: 2.2, evEbitda: 16 },
+    { symbol: 'LOW', name: 'Lowe\'s', marketPosition: '家居建材零售', coreStrength: 'DIY 客群', coreRisk: '市占被 HD 擠壓', pe: 20, ps: 1.7, evEbitda: 13 },
+  ],
+  // 電動車 / 汽車製造（TSLA / GM / F / STLA）
+  'Automobiles': [
+    { symbol: 'GM', name: 'General Motors', marketPosition: '傳統車廠 + EV', coreStrength: '北美製造規模', coreRisk: 'EV 轉型', pe: 6, ps: 0.4, evEbitda: 4 },
+    { symbol: 'F', name: 'Ford', marketPosition: '傳統車廠 + EV', coreStrength: 'F-150 品牌', coreRisk: 'EV 虧損', pe: 8, ps: 0.3, evEbitda: 5 },
+    { symbol: 'STLA', name: 'Stellantis', marketPosition: '跨國車廠', coreStrength: '品牌組合', coreRisk: '中國市場', pe: 5, ps: 0.3, evEbitda: 3 },
+    { symbol: 'RIVN', name: 'Rivian', marketPosition: 'EV 新創', coreStrength: '亞馬遜合作', coreRisk: '量產 + 現金流', pe: 0, ps: 2, evEbitda: 0 },
+    { symbol: 'NIO', name: 'NIO (ADR)', marketPosition: '中國 EV 新創', coreStrength: '換電模式', coreRisk: '資金壓力', pe: 0, ps: 1, evEbitda: 0 },
+  ],
+  // 媒體 / 串流（DIS / NFLX / WBD / PARA）
+  'Entertainment': [
+    { symbol: 'NFLX', name: 'Netflix', marketPosition: '全球串流龍頭', coreStrength: '內容 + 訂戶', coreRisk: '廣告方案競爭', pe: 45, ps: 9, evEbitda: 30 },
+    { symbol: 'DIS', name: 'Walt Disney', marketPosition: '媒體 + 主題樂園', coreStrength: 'IP 組合', coreRisk: '線性電視衰退', pe: 20, ps: 2, evEbitda: 12 },
+    { symbol: 'WBD', name: 'Warner Bros. Discovery', marketPosition: '媒體', coreStrength: 'HBO + 內容', coreRisk: '負債 + 訂戶流失', pe: 0, ps: 1.2, evEbitda: 9 },
+    { symbol: 'PARA', name: 'Paramount Global', marketPosition: '媒體', coreStrength: 'CBS + 圖書館', coreRisk: '串流競爭', pe: 0, ps: 0.4, evEbitda: 6 },
+  ],
 };
 
 /**
@@ -316,6 +379,11 @@ export function getIndustryPeers(industry: string | undefined): IndustryPeer[] {
  * 注意：只有第一層主要 SIC（companies 偶爾會有多個 SIC，這裡只取第一個）
  */
 export const SIC_TO_INDUSTRY: Record<string, string> = {
+  // ============ 2830-2836: Drugs (Pharmaceutical Preparations) ============
+  '2834': 'Pharmaceuticals',          // Pharmaceutical Preparations (PFE / JNJ / MRK / LLY / ABBV)
+  '2835': 'Pharmaceuticals',          // In Vitro & In Vivo Diagnostic Substances
+  '2836': 'Pharmaceuticals',          // Pharmaceutical Preparations (alt)
+
   // ============ 3570-3599: Computer & Office Equipment ============
   '3570': 'Computer Hardware',          // Computer & Office Equipment (HPQ / IBM)
   '3571': 'Computer Hardware',          // Electronic Computers (AAPL / Dell)
@@ -342,8 +410,53 @@ export const SIC_TO_INDUSTRY: Record<string, string> = {
   '4841': 'Telecom Services',           // Cable & Other Pay Television
   '4899': 'Telecom Services',           // Communications Services NEC
 
+  // ============ 1300-1399: Oil & Gas Extraction ============
+  '1311': 'Oil & Gas',                  // Crude Petroleum & Natural Gas (XOM / CVX / COP)
+  '1381': 'Oil & Gas',                  // Drilling Oil & Gas Wells
+  '1382': 'Oil & Gas',                  // Oil & Gas Field Exploration Services
+  '1389': 'Oil & Gas',                  // Oil & Gas Field Services NEC
+  '2911': 'Oil & Gas',                  // Petroleum Refining (VLO / MPC / PSX)
+
+  // ============ 6020-6036: Banks ============
+  '6021': 'Banks—Major',                // National Commercial Banks (JPM / BAC / WFC / C)
+  '6022': 'Banks—Major',                // State Commercial Banks
+  '6029': 'Banks—Major',                // Commercial Banks NEC
+  '6035': 'Banks—Major',                // Savings Institutions
+  '6036': 'Banks—Major',                // Savings Institutions NEC
+  '6099': 'Banks—Major',                // Functions Related to Deposit Banking
+  '6153': 'Banks—Major',                // Short-Term Business Credit (GS / MS 部分業務)
+  '6211': 'Banks—Major',                // Security Brokers & Dealers (GS / MS / WFC)
+  '6282': 'Banks—Major',                // Investment Advice
+
+  // ============ 5200-5599: Retail Trade ============
+  '5200': 'Retail',                     // Retail-Building Materials (HD / LOW)
+  '5311': 'Retail',                     // Retail-Variety Stores (WMT / TGT)
+  '5331': 'Retail',                     // Retail-Variety Stores
+  '5399': 'Retail',                     // Retail-Misc General Merchandise (COST)
+  '5411': 'Retail',                     // Retail-Grocery Stores
+  '5531': 'Retail',                     // Retail-Auto & Home Supply Stores
+
+  // ============ 3700-3799: Transportation Equipment (汽車) ============
+  '3711': 'Automobiles',                // Motor Vehicles & Passenger Car Bodies (TSLA / GM / F / STLA / TM)
+  '3713': 'Automobiles',                // Truck & Bus Bodies
+  '3714': 'Automobiles',                // Motor Vehicle Parts & Accessories
+  '3792': 'Automobiles',                // Travel Trailers & Campers
+
+  // ============ 3840-3851: Medical Instruments / Biotech ============
+  '3841': 'Biotechnology',              // Surgical & Medical Instruments
+  '3842': 'Biotechnology',              // Orthopedic Prosthetic & Surgical Supplies
+  '3845': 'Biotechnology',              // Electromedical & Electrotherapeutic Apparatus
+  '3851': 'Biotechnology',              // Ophthalmic Goods
+
+  // ============ 7800-7899: Motion Pictures / Entertainment ============
+  '7812': 'Entertainment',              // Motion Picture & Video Tape Production (DIS / NFLX)
+  '7819': 'Entertainment',              // Services Allied to Motion Picture Production
+  '7822': 'Entertainment',              // Motion Picture & Video Tape Distribution
+  '7830': 'Entertainment',              // Motion Picture Theaters
+  '7841': 'Entertainment',              // Video Tape Rental (NFLX 早期)
+
   // ============ 7300-7399: Services-Miscellaneous Business ============
-  '7370': 'Computer Hardware',          // Services-Computer Programming & Data Processing (外包業)
+  '7370': 'Computer Hardware',          // Services-Computer Programming & Data Processing
   '7371': 'Computer Hardware',          // Services-Computer Programming & Data Processing
   '7372': 'Computer Hardware',          // Prepackaged Software (但其實是 SaaS，不準)
   '7373': 'Computer Hardware',          // Computer Integrated Systems Design

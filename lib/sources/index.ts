@@ -387,16 +387,22 @@ export async function getStockOverview(symbol: string): Promise<StockOverview> {
     // Step 2.5: 分析師目標價 + SEC EDGAR（美股）/ MOPS XBRL（台股）精確財報
     //           + Yahoo v10 quoteSummary（補 EPS / PE / PB，Finnhub 拿不到時 fallback）
     const usedIsTaiwan = usedSymbol.endsWith('.TW') || usedSymbol.endsWith('.TWO');
+    // 對 ETF 跳過 Yahoo v10 quoteSummary + analyst targets（台股 ETF 沒 EPS / PE / 分析師目標價，跑了也白跑）
+    const skipQsForEtf = usedSymbol.startsWith('00') && usedIsTaiwan;
     const [analystData, secData, yahooQsData] = await Promise.all([
-      fetchAnalystTargets(usedSymbol),
+      skipQsForEtf ? Promise.resolve(null) : fetchAnalystTargets(usedSymbol),
       usedIsTaiwan ? Promise.resolve(null) : fetchSecDataForUs(usedSymbol),
       // Yahoo v10 quoteSummary 是 EPS / PE / PB 的最穩定來源（Finnhub metric 偶爾缺）
-      fetchYahooQuoteSummary(usedSymbol),
+      skipQsForEtf ? Promise.resolve(null) : fetchYahooQuoteSummary(usedSymbol),
     ]);
 
     // Step 2.6: 台股個股抓 MOPS XBRL 精確財報（ETF 自動跳過）
     let mopsData: mopsXbrl.MopsFundamentals | null = null;
-    if (usedIsTaiwan) {
+    // 對 ETF（如 00897、0050）跳過 MOPS — ETF 沒有公司財報，MOPS endpoint 必回「檔案不存在」
+    // 但 MOPS endpoint 每次約 1.5-2s，順序試 5 個 trial 就要 10s。直接跳過省 10s+
+    if (skipQsForEtf) {
+      console.log(`[overview] ${usedSymbol}: ETF, skip MOPS fetch`);
+    } else if (usedIsTaiwan) {
       mopsData = await fetchMopsDataForTw(usedSymbol);
     }
 
@@ -602,7 +608,7 @@ function parseAlphaDailyToPoints(
 
 export async function getFinancials(symbol: string): Promise<FinancialsData> {
   const sym = symbol.toUpperCase();
-  return cached(`financials:v4:${sym}`, DEFAULT_TTL, async () => {
+  return cached(`financials:v5:${sym}`, DEFAULT_TTL, async () => {
     // 0. 台股個股 → MOPS XBRL 抓近 5 年年度累計（Alpha Vantage 對台股覆蓋極差）
     if (sym.endsWith('.TW') || sym.endsWith('.TWO')) {
       const rawSymbol = sym.replace(/\.(TW|TWO)$/, '');
@@ -626,7 +632,50 @@ export async function getFinancials(symbol: string): Promise<FinancialsData> {
     // 1. Alpha Vantage（主源，適用美股與部分全球股）
     if (alphaVantage.isAvailable()) {
       const result = await withRetry('alphavantage.financials', () => alphaVantage.fetchFinancials(sym));
-      if (result && result.years.length > 0) return result;
+      if (result && result.years.length > 0) {
+        // AV 對部分發行人（HPQ/NOK/TM 等）EPS / 資產負債欄位為 0 — 對美股自動去 SEC EDGAR 補
+        // 觸發條件：所有年的 EPS 全 0、或 TA 全 0（關鍵欄位至少一個為 0）
+        const needsSecFill = !sym.endsWith('.TW') && !sym.endsWith('.TWO') && result.years.some(
+          (y) => (y.eps === 0 && y.netIncome > 0) || y.totalAssets === 0,
+        );
+        if (!needsSecFill) return result;
+        // 補抓 SEC 5 年
+        try {
+          const cik = await secCik.lookupCikByTicker(sym);
+          if (cik) {
+            const history = await secEdgar.fetchSecFinancialHistory(cik, 5);
+            if (history && history.years.length > 0) {
+              const secYears = secHistoryToFinancialYears(history);
+              // 將 SEC 的 EPS / TA / TE / TL / CFO / CapEx 補到 AV 年份對應年份
+              for (const y of result.years) {
+                const secY = secYears.find((s) => s.year === y.year);
+                if (secY) {
+                  if (y.eps === 0 && secY.eps) y.eps = secY.eps;
+                  if (y.totalAssets === 0 && secY.totalAssets) y.totalAssets = secY.totalAssets;
+                  if (y.totalEquity === 0 && secY.totalEquity) y.totalEquity = secY.totalEquity;
+                  if (y.totalLiabilities === 0 && secY.totalLiabilities) y.totalLiabilities = secY.totalLiabilities;
+                  if (y.operatingCashFlow === 0 && secY.operatingCashFlow) y.operatingCashFlow = secY.operatingCashFlow;
+                  if (y.freeCashFlow === 0 && secY.freeCashFlow) y.freeCashFlow = secY.freeCashFlow;
+                  // 重算 ROE / ROA / debtToEquity（之前因 TA/TE=0 算出 0）
+              // ROE 在股東權益為負（庫藏股過多，如 HPQ）時數學上無意義 → 標 null
+              // ROA / debtToEquity 在 TA=0 時無意義 → 標 null
+              if (y.totalEquity > 0) y.roe = (y.netIncome / y.totalEquity) * 100;
+              else if (y.totalEquity < 0) y.roe = null;  // 負股東權益（庫藏股過度回購）
+              else y.roe = 0;  // 缺資料保留 0
+              if (y.totalAssets > 0) y.roa = (y.netIncome / y.totalAssets) * 100;
+              else y.roa = null;
+              if (y.totalEquity > 0) y.debtToEquity = (y.totalLiabilities / y.totalEquity) * 100;
+              else y.debtToEquity = null;
+                }
+              }
+              console.log(`[sec-fill] ${sym}: AV 補 SEC ${result.years.filter(y => y.eps > 0 || y.totalAssets > 0).length}/${result.years.length} 年`);
+            }
+          }
+        } catch (e) {
+          console.warn('[sec-fill] failed:', e instanceof Error ? e.message : e);
+        }
+        return result;
+      }
     }
     console.log('[fallback] alphavantage financials failed');
 
@@ -637,6 +686,7 @@ export async function getFinancials(symbol: string): Promise<FinancialsData> {
         const cik = await secCik.lookupCikByTicker(sym);
         if (cik) {
           const history = await secEdgar.fetchSecFinancialHistory(cik, 5);
+          console.log(`[sec-fill] ${sym}: SEC history.years=${history?.years.map(y => y.year).join(',')}`);
           if (history && history.years.length > 0) {
             const converted = secHistoryToFinancialYears(history);
             if (converted.length > 0) {
@@ -825,7 +875,7 @@ async function fetchCompetitorMetricsOne(symbol: string): Promise<Partial<Compet
     if (m.fiftyTwoWeekLow) out.fiftyTwoWeekLow = m.fiftyTwoWeekLow;
   }
 
-  // 2. Finnhub metric：補 PE / EPS / Beta / 52w / 殖利率
+  // 2. Finnhub metric：補 PE / EPS / 毛利率 / 淨利率 / ROE / Beta / 52w / 殖利率
   if (finnhub.isAvailable()) {
     const metric = await withRetry('finnhub.metric', () => finnhub.fetchMetric(symbol));
     if (metric) {
@@ -836,6 +886,10 @@ async function fetchCompetitorMetricsOne(symbol: string): Promise<Partial<Compet
       };
       if (!out.pe && metric.peBasicExtraTTM != null) out.pe = num(metric.peBasicExtraTTM);
       out.eps = num(metric.epsBasicExtraTTM);
+      // 毛利率 / 淨利率 — Finnhub metric.all 已有 TTM（已是百分比小數，如 0.43 = 43%）
+      // competitor table 顯示用百分比（43.00%），所以不 ×100
+      if (metric.grossMarginTTM != null) out.grossMargin = num(metric.grossMarginTTM);
+      if (metric.netMarginTTM != null) out.netMargin = num(metric.netMarginTTM);
       // Finnhub metric.roeTTM 已經是百分比（例如 146.69），不要再 * 100
       out.roe = num(metric.roeTTM);
       if (out.fiftyTwoWeekHigh === undefined) out.fiftyTwoWeekHigh = num(metric['52WeekHigh']);
@@ -849,6 +903,37 @@ async function fetchCompetitorMetricsOne(symbol: string): Promise<Partial<Compet
     if (profile?.marketCapitalization) out.marketCap = profile.marketCapitalization * 1e6;
   }
 
+  // 4. SEC EDGAR fallback：當 Finnhub 缺毛利率/淨利率（free tier 有缺）時抓 10-K 補
+  //    從最新一筆 NI / revenue / GP 計算 grossMargin / netMargin
+  if (out.grossMargin === undefined || out.netMargin === undefined) {
+    try {
+      const cik = await secCik.lookupCikByTicker(symbol);
+      if (cik) {
+        const history = await secEdgar.fetchSecFinancialHistory(cik, 1);
+        if (history && history.years.length > 0) {
+          const lastYear = history.years[history.years.length - 1];
+          if (out.grossMargin === undefined && lastYear.revenue && lastYear.revenue > 0 && lastYear.grossProfit) {
+            out.grossMargin = (lastYear.grossProfit / lastYear.revenue) * 100;
+          }
+          if (out.netMargin === undefined && lastYear.revenue && lastYear.revenue > 0 && lastYear.netIncome) {
+            out.netMargin = (lastYear.netIncome / lastYear.revenue) * 100;
+          }
+          if (out.eps === undefined && lastYear.netIncome && lastYear.eps) {
+            out.eps = lastYear.eps;
+          }
+        }
+      }
+    } catch {
+      // SEC fallback 失敗靜默
+    }
+  }
+
+  // 5. PE fallback：Finnhub free tier 不給 peBasicExtraTTM，自己用 price / EPS 算
+  //    但 EPS 為負或 0 時 PE 數學上無意義（會算出負 PE 誤導），保持 undefined
+  if (out.pe === undefined && chart?.meta?.regularMarketPrice && out.eps && out.eps > 0) {
+    out.pe = chart.meta.regularMarketPrice / out.eps;
+  }
+
   return out;
 }
 
@@ -858,7 +943,7 @@ export async function getCompetitorMetrics(symbols: string[]): Promise<Map<strin
   await Promise.all(
     symbols.map(async (sym) => {
       try {
-        const m = await cached(`competitor:${sym.toUpperCase()}`, 30 * 60 * 1000, () =>
+        const m = await cached(`competitor:v2:${sym.toUpperCase()}`, 30 * 60 * 1000, () =>
           fetchCompetitorMetricsOne(sym),
         );
         result.set(sym, m);
@@ -944,7 +1029,7 @@ function secHistoryToFinancialYears(history: secEdgar.SecFinancialHistory): Fina
         grossMargin: safeDiv(grossProfit, revenue) * 100,
         operatingMargin: safeDiv(operatingIncome, revenue) * 100,
         netMargin: safeDiv(netIncome, revenue) * 100,
-        roe: (totalEquity > 0) ? safeDiv(netIncome, totalEquity) * 100 : 0,
+        roe: (totalEquity > 0) ? safeDiv(netIncome, totalEquity) * 100 : (totalEquity < 0 ? null : 0),
         roa: safeDiv(netIncome, totalAssets) * 100,
         debtToEquity: safeDiv(totalLiabilities, totalEquity) * 100,
       };

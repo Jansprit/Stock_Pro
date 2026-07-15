@@ -125,8 +125,8 @@ export function FinancialTable({ overview, years, loading, error }: FinancialTab
               <Row label="毛利率" cells={sortedYears.map((y) => `${y.grossMargin.toFixed(2)}%`)} positive />
               <Row label="營業利益率" cells={sortedYears.map((y) => `${y.operatingMargin.toFixed(2)}%`)} />
               <Row label="淨利率" cells={sortedYears.map((y) => `${y.netMargin.toFixed(2)}%`)} positive />
-              <Row label="ROE" cells={sortedYears.map((y) => `${y.roe.toFixed(2)}%`)} positive />
-              <Row label="ROA" cells={sortedYears.map((y) => `${y.roa.toFixed(2)}%`)} positive />
+              <Row label="ROE" cells={sortedYears.map((y) => y.roe !== null ? `${y.roe.toFixed(2)}%` : 'N/A')} positive />
+              <Row label="ROA" cells={sortedYears.map((y) => y.roa !== null ? `${y.roa.toFixed(2)}%` : 'N/A')} positive />
             </tbody>
           </table>
         )}
@@ -171,7 +171,7 @@ export function FinancialTable({ overview, years, loading, error }: FinancialTab
               <Row label="股東權益" cells={sortedYears.map((y) => formatCurrency(y.totalEquity, overview.currency))} />
               <Row label="營運現金流" cells={sortedYears.map((y) => formatCurrency(y.operatingCashFlow, overview.currency))} />
               <Row label="自由現金流" cells={sortedYears.map((y) => formatCurrency(y.freeCashFlow, overview.currency))} highlight />
-              <Row label="負債比 (D/E)" cells={sortedYears.map((y) => `${y.debtToEquity.toFixed(2)}%`)} warning />
+              <Row label="負債比 (D/E)" cells={sortedYears.map((y) => y.debtToEquity !== null ? `${y.debtToEquity.toFixed(2)}%` : 'N/A')} warning />
               {sortedYears[0]?.currentRatio !== undefined && (
                 <Row label="流動比" cells={sortedYears.map((y) => y.currentRatio?.toFixed(2) ?? 'N/A')} />
               )}
@@ -183,6 +183,17 @@ export function FinancialTable({ overview, years, loading, error }: FinancialTab
               </tr>
             </tbody>
           </table>
+        )}
+
+        {/* N/A 說明：表格下方加註，避免使用者誤判為程式或資料來源出錯 */}
+        {sortedYears.some((y) => y.roe === null || y.debtToEquity === null) && (
+          <div className="mt-3 rounded-lg border border-info/40 bg-info/5 p-3 text-xs text-fg-muted">
+            <strong className="text-fg">「N/A」說明：</strong>
+            當股東權益為負值（如庫藏股過度回購、公司實施大規模買回庫藏股，
+            使會計上的「股東權益」欄位小於零），ROE 與負債比（D/E）
+            在數學上無意義 — 這是<strong className="text-fg">真實的財務現象</strong>，
+            並非資料錯誤。ROA / 損益表項目仍正常顯示，代表核心業務的獲利能力。
+          </div>
         )}
       </div>
     </Card>
@@ -247,7 +258,7 @@ function analyzeSafety(years: FinancialYear[]): string {
   const last = [...years].sort((a, b) =>b.year - a.year)[0];
   if (!last) return '無資料';
 
-  const debt = last.debtToEquity;
+  const debt = last.debtToEquity ?? 0;
   const cash = last.operatingCashFlow;
   const fcf = last.freeCashFlow;
 

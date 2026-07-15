@@ -71,7 +71,13 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    const report = await generateAIReport(body);
+    // competitors 結構兼容：可接受 Array<...> 或 { competitors: Array<...>, aiSummary }
+    // （前端 competitors API 回傳 { competitors: [], aiSummary: '' }）
+    const competitorsInput = Array.isArray(body.competitors)
+      ? body.competitors
+      : (body.competitors as unknown as { competitors?: unknown[] })?.competitors ?? [];
+
+    const report = await generateAIReport({ ...body, competitors: competitorsInput as AIReportRequestBody['competitors'] });
     return NextResponse.json({ report });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'AI 報告生成失敗';

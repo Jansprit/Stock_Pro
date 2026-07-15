@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Database, ExternalLink, Info, Github } from 'lucide-react';
 
 interface SettingsPanelProps {
@@ -99,16 +100,22 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     return () => document.removeEventListener('keydown', handler);
   }, [open, onClose]);
 
-  if (!open) return null;
+  // Portal 必須在 client 端（SSR 沒有 document）
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!open || !mounted) return null;
 
-  return (
-    <div
-      className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/85 p-4 backdrop-blur-lg"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label="設定與資料源說明"
-    >
+  // 用 createPortal 渲染到 document.body，避開 Header 的 sticky stacking context 截斷
+  // WHY: fixed inset-0 在 sticky 父層內只覆蓋 header 高度 69px，body 完全看不到
+  return createPortal(
+    (
+      <div
+        className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/85 p-4 backdrop-blur-lg"
+        onClick={onClose}
+        role="dialog"
+        aria-modal="true"
+        aria-label="設定與資料源說明"
+      >
       <div
         className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col rounded-xl border border-edge bg-card shadow-2xl"
         onClick={(e) => e.stopPropagation()}
@@ -129,8 +136,9 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         </div>
 
         {/* Body — flex-1 + min-h-0 + overflow-y-auto 是唯一可滾動區。
-    min-h-0 是 flexbox scroll 必加的（否則內容過長會把容器撐開） */}
-        <div className="min-h-0 flex-1 overflow-y-auto bg-card p-6">
+    min-h-0 是 flexbox scroll 必加的（否則內容過長會把容器撐開）。
+    bg-sunken 比 bg-card 暗一階，讓 modal body 與背景頁有明顯視覺區隔。 */}
+        <div className="min-h-0 flex-1 overflow-y-auto bg-sunken p-6">
           <div className="space-y-6">
           {/* 設計說明 */}
           <section className="rounded-lg border border-info/40 bg-info/5 p-4 text-sm">
@@ -257,5 +265,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         </div>
       </div>
     </div>
+    ),
+    document.body,
   );
 }

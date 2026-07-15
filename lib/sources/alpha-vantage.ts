@@ -173,6 +173,10 @@ interface AlphaIncomeReport {
   operatingIncome?: string;
   netIncome?: string;
   dilutedEPS?: string;
+  reportedEPS?: string;
+  weightedAverageShsOut?: string;
+  weightedAverageShsOutDil?: string;
+  commonStockSharesOutstanding?: string;
 }
 
 interface AlphaIncomeStatement {
@@ -277,13 +281,23 @@ export async function fetchFinancials(symbol: string): Promise<FinancialsData | 
     const grossProfit = num(iy.grossProfit);
     const operatingIncome = num(iy.operatingIncome);
     const netIncome = num(iy.netIncome);
-    // Alpha Vantage INCOME_STATEMENT 的 dilutedEPS 對外國發行人（NOK、TM 等 ADR）
-    // 常是 "None"（漏欄位），需 fallback 用 OVERVIEW 的 EPS（最近 TTM）
-    // 對美股本土發行人（如 AAPL）dilutedEPS 通常有值
+    // Alpha Vantage INCOME_STATEMENT 的 dilutedEPS 對外國發行人（NOK、TM、HPQ 等）常是 undefined
+    // （欄位直接不存在，舊版的 reportedEPS 也一樣）。Fallback 策略：
+    //   1. 優先用該年 income statement 的 dilutedEPS（真實年度數字）
+    //   2. 缺時 fallback 到該年的 reportedEPS
+    //   3. 都缺時改用 netIncome / sharesOutstanding 自己算
+    //   4. shares 也不知道 → 退到 OVERVIEW 的 TTM EPS，但只在「確實缺數據」時用，且
+    //      接受此數據是近似值（標記為 0 讓 SEC fallback 有機會接手）
     let eps = num(iy.dilutedEPS);
+    if (eps === 0) eps = num(iy.reportedEPS);
     if (eps === 0) {
-      eps = overviewEPS ?? 0;
+      const shares = num(iy.weightedAverageShsOut) || num(iy.weightedAverageShsOutDil) || num(iy.commonStockSharesOutstanding);
+      if (shares > 0 && netIncome > 0) {
+        eps = netIncome / shares;
+      }
     }
+    // 不要再 fallback overviewEPS — 那會把單一 TTM 數字套到所有 5 年造成「每年都一樣」的錯覺。
+    // 真正缺資料就讓 EPS = 0，後端會 fallback 到 SEC EDGAR 的真實年度 EPS。
     const totalAssets = num(by?.totalAssets);
     const totalLiabilities = num(by?.totalLiabilities);
     const totalEquity = num(by?.totalShareholderEquity);

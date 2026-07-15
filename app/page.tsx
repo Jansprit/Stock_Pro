@@ -7,7 +7,7 @@ import { PopularStocks } from '@/components/layout/PopularStocks';
 import { Dashboard } from '@/components/dashboard/Dashboard';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { CardSkeleton } from '@/components/ui/Skeleton';
-import type { DashboardData } from '@/lib/types';
+import type { DashboardData, FinancialYear } from '@/lib/types';
 
 interface FetchState {
   loading: boolean;
@@ -46,15 +46,18 @@ export default function HomePage() {
           .then((r) => r.json())
           .finally(() => clearTimeout(id));
       };
-      const [overviewRes, financialsRes, chartRes, newsRes, competitorsRes] = await Promise.allSettled([
-        fetchWithTimeout(`/api/stock/${encodeURIComponent(symbol)}`),
-        fetchWithTimeout(`/api/financials/${encodeURIComponent(symbol)}`),
-        fetchWithTimeout(`/api/chart/${encodeURIComponent(symbol)}?range=1Y`),
-        fetchWithTimeout(`/api/news/${encodeURIComponent(symbol)}`),
-        fetchWithTimeout(`/api/competitors/${encodeURIComponent(symbol)}`),
-      ]);
-
-      // 檢查 overview（必要欄位）
+      // 每個 fetch 依「期望最慢的時間」給不同 timeout：
+      // - overview / chart / news / competitors：通常 < 5s，給 30s
+      // - financials：可能跑 MOPS 多年度 + SEC fallback（30-60s），給 60s
+      // 整體最壞情況是 60s，但常見狀況下會更快
+      const QUICK_TIMEOUT = 30_000;
+      const SLOW_TIMEOUT = 60_000;
+      // 兩階段並行：先抓 overview（必要）+ 快 API（chart/news/competitors），再分開抓 financials
+      // 這樣即使 financials 卡 60s（MOPS cold start / SEC fallback），其他區塊也能先渲染
+      const overviewRes = await fetchWithTimeout(`/api/stock/${encodeURIComponent(symbol)}`, QUICK_TIMEOUT).then(
+        (r) => ({ status: 'fulfilled' as const, value: r }),
+        (e) => ({ status: 'rejected' as const, reason: e }),
+      );
       if (overviewRes.status === 'rejected' || overviewRes.value?.error) {
         const errMsg = overviewRes.status === 'rejected'
           ? '個股資料取得失敗'
@@ -68,47 +71,36 @@ export default function HomePage() {
         });
         return;
       }
-
       const overview = overviewRes.value.overview;
 
-      // 處理 financials：若 API 失敗或超時，嘗試重試一次（30s 內）
-      let financials = { symbol, currency: overview.currency, years: [] };
-      const isFinFailed = financialsRes.status !== 'fulfilled' || financialsRes.value?.error;
-      if (isFinFailed) {
-        console.warn('[page] financials 初次失敗，重試一次...');
-        try {
-          const retry = await fetchWithTimeout(`/api/financials/${encodeURIComponent(symbol)}`);
-          if (retry && !retry.error && retry.financials) {
-            financials = retry.financials;
-          }
-        } catch (e) {
-          console.warn('[page] financials 重試也失敗:', e instanceof Error ? e.message : e);
-        }
-      } else {
-        financials = financialsRes.value.financials;
-      }
+      // 並行抓剩餘 4 個（chart/news/competitors 用 QUICK_TIMEOUT，financials 用 SLOW_TIMEOUT）
+      // 先抓快的 3 個（chart/news/competitors），完成後立刻 setState 讓 dashboard 渲染
+      // financials 慢也無所謂 — 之後再 setState 補上
+      const [chartRes, newsRes, competitorsRes] = await Promise.allSettled([
+        fetchWithTimeout(`/api/chart/${encodeURIComponent(symbol)}?range=1Y`, QUICK_TIMEOUT),
+        fetchWithTimeout(`/api/news/${encodeURIComponent(symbol)}`, QUICK_TIMEOUT),
+        fetchWithTimeout(`/api/competitors/${encodeURIComponent(symbol)}`, QUICK_TIMEOUT),
+      ]);
 
-      const chartPoints = chartRes.status === 'fulfilled' && !chartRes.value.error
-        ? chartRes.value.points
+      const chartPoints = chartRes.status === 'fulfilled' && !chartRes.value?.error
+        ? chartRes.value.chart ?? chartRes.value
+        : null;
+      const news = newsRes.status === 'fulfilled' && !newsRes.value?.error
+        ? (newsRes.value.news ?? [])
         : [];
-
-      const news = newsRes.status === 'fulfilled' && !newsRes.value.error
-        ? newsRes.value.news
-        : [];
-
-      const competitors = competitorsRes.status === 'fulfilled' && !competitorsRes.value.error
+      const competitors = competitorsRes.status === 'fulfilled' && !competitorsRes.value?.error
         ? competitorsRes.value
         : { competitors: [], aiSummary: '' };
 
-      // 先設定基本資料（不含 AI 報告），UI 可以馬上渲染
+      // 先設定基本資料（不含 financials / AI 報告），UI 可以馬上渲染
       setState({
         loading: false,
         error: null,
         aiError: null,
-        aiLoading: true, // 標記 AI 報告開始生成
+        aiLoading: true,
         data: {
           overview,
-          financials,
+          financials: { symbol, currency: overview.currency, years: [] }, // 先用空財報
           chart: chartPoints,
           news,
           competitors,
@@ -116,6 +108,20 @@ export default function HomePage() {
           fetchedAt: new Date().toISOString(),
         },
       });
+
+      // financials 單獨慢抓（不阻塞主要渲染）。失敗 / 超時就用空財報，UI 顯示「無財報」
+      let financials: { symbol: string; currency: string; years: FinancialYear[] } = { symbol, currency: overview.currency, years: [] };
+      try {
+        const finRes = await fetchWithTimeout(`/api/financials/${encodeURIComponent(symbol)}`, SLOW_TIMEOUT);
+        if (finRes && !finRes.error && finRes.financials) {
+          financials = finRes.financials as { symbol: string; currency: string; years: FinancialYear[] };
+        }
+      } catch (e) {
+        console.warn('[page] financials 超時或失敗，UI 將顯示「無財報」:', e instanceof Error ? e.message : e);
+      }
+
+      // 把 financials 補上（不重新 setState 整個 data，避免 re-render 其他區塊）
+      setState((s) => s.data ? { ...s, data: { ...s.data, financials } } : s);
 
       // 再呼叫 AI 報告（非阻塞，但載入指示）
       try {
@@ -145,7 +151,7 @@ export default function HomePage() {
               currency: overview.currency,
             },
             financials: {
-              years: financials.years.map((y: { year: number; revenue: number; grossProfit: number; netIncome: number; eps: number; freeCashFlow: number; totalLiabilities: number; totalEquity: number; grossMargin: number; netMargin: number; roe: number; debtToEquity: number }) => ({
+              years: financials.years.map((y: FinancialYear) => ({
                 year: y.year,
                 revenue: y.revenue,
                 grossProfit: y.grossProfit,
@@ -156,8 +162,9 @@ export default function HomePage() {
                 totalEquity: y.totalEquity,
                 grossMargin: y.grossMargin,
                 netMargin: y.netMargin,
-                roe: y.roe,
-                debtToEquity: y.debtToEquity,
+                // roe / debtToEquity 可能是 null（負股東權益），AI prompt 已處理
+                roe: y.roe ?? 0,
+                debtToEquity: y.debtToEquity ?? 0,
               })),
             },
             news: news.slice(0, 10).map((n: { title: string; summary: string; sentiment: string; category: string }) => ({

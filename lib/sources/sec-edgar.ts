@@ -226,29 +226,62 @@ function parseSecFacts(data: SecCompanyFacts): SecFundamentals {
 
 // ========== 多年期歷史（給財務趨勢圖用） ==========
 
-/** 從 SEC companyfacts 抽出「每個西曆年」的彙總（10-K 全年值，非單季） */
+/** 從 SEC companyfacts 抽出「每個西曆年」的彙總（10-K 全年值，非單季）
+ *
+ * Frame 規則（很混亂，不同公司 SEC 申報習慣不同）：
+ * - duration 概念（revenue / netIncome / operatingCashFlow）：frame 應該是 `CYxxxx`，
+ *   但很多公司不帶 frame 也能算（end-date 已是年末）
+ * - instant 概念（assets / equity）：frame 是 `CYxxxxQ#I`，且每筆都帶，沒 frame=undefined 的情況
+ *
+ * 寬鬆化（v4 → v5）：只認 `form === '10-K'` + `fp === 'FY'` + end 是年末，
+ * frame 用來驗證「不是單季誤標」就好，不要當必要條件。
+ */
 function pickAnnualHistory(
   concept: SecFactConcept | undefined,
   unit = 'USD',
 ): Array<{ year: number; val: number; end: string }> {
   if (!concept || !concept.units[unit]) return [];
   const series = concept.units[unit];
-  // 只挑 10-K / 10-K/A 的全年值（fp='FY' 且 frame 是 CYxxxx，沒有 Q 後綴）
-  // frame: 'CY2024' = 全年；'CY2024Q1/Q2/Q3' = 單季（誤標 fp='FY'）
-  const annual = series.filter(
-    (s) =>
-      s.fp === 'FY' &&
-      (s.form === '10-K' || s.form === '10-K/A') &&
-      typeof s.frame === 'string' &&
-      /^CY\d{4}$/.test(s.frame),
-  );
-  // 每個 end-date 取最新一筆（10-K 改訂過的話）
-  const byYear = new Map<number, { val: number; end: string }>();
+
+  // 判斷這個概念是 instant（資產負債）還是 duration（損益/現金流）
+  // 方法：看 label / name 含 Assets / Liabilities / Equity → instant，其他 duration
+  const isInstant =
+    concept.label?.match(/assets|liabilities|equity/i) ||
+    false;
+
+  const annual = series.filter((s) => {
+    if (s.fp !== 'FY') return false;
+    if (s.form !== '10-K' && s.form !== '10-K/A') return false;
+    // duration 概念：frame 可以是 CYxxxx 或 undefined
+    // instant 概念：frame 必須是 CYxxxxQ[1-4]I（資產負債表本來就是 instant）
+    if (typeof s.frame === 'string') {
+      if (isInstant) {
+        if (!/^CY\d{4}Q[1-4]I$/.test(s.frame)) return false;
+      } else {
+        if (!/^CY\d{4}$/.test(s.frame)) return false;
+      }
+    }
+    return true;
+  });
+
+  // 同份 10-K 一次報告 3 個會計年度（如 HPQ accn=...-25-000071 含 2023+2024+2025），
+  // 所以必須用 (accn, end) 複合 key 不能只用 accn
+  const byAccnEnd = new Map<string, { val: number; end: string; accn: string; filed: string }>();
   for (const s of annual) {
-    const year = new Date(s.end).getFullYear();
+    const key = `${s.accn}|${s.end}`;
+    const existing = byAccnEnd.get(key);
+    if (!existing || s.filed > existing.filed) {
+      byAccnEnd.set(key, { val: s.val, end: s.end, accn: s.accn, filed: s.filed });
+    }
+  }
+
+  // 再 by year 取「最新 filed」的版本（重述優先）
+  const byYear = new Map<number, { val: number; end: string; filed: string }>();
+  for (const v of byAccnEnd.values()) {
+    const year = new Date(v.end).getFullYear();
     const existing = byYear.get(year);
-    if (!existing || s.end > existing.end) {
-      byYear.set(year, { val: s.val, end: s.end });
+    if (!existing || v.filed > existing.filed) {
+      byYear.set(year, { val: v.val, end: v.end, filed: v.filed });
     }
   }
   return Array.from(byYear.entries())
@@ -290,7 +323,7 @@ export async function fetchSecFinancialHistory(
   cik: number,
   years = 5,
 ): Promise<SecFinancialHistory | null> {
-  return cached(`sec:history:v4:${cik}:${years}`, TTL, async () => {
+  return cached(`sec:history:v8:${cik}:${years}`, TTL, async () => {
     const cikPadded = String(cik).padStart(10, '0');
     const url = `${BASE_URL}/api/xbrl/companyfacts/CIK${cikPadded}.json`;
     try {
