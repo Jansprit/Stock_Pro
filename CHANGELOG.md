@@ -5,6 +5,57 @@
 
 ---
 
+## [0.5.4] - 2026-07-17 — 🎉 重大里程碑：行動版 AI 報告根本解
+
+### 重大成就
+
+- **行動版 Chrome AI 報告終於能正常提供**（之前 Android 6+ 次測試全失敗）
+  - 採用 **Server-Sent Events (SSE) streaming** 取代一次性 POST
+  - 每 10s 推 keep-alive chunk，徹底解決 Wi-Fi 6 router idle TCP timeout 切斷（60-90s）
+  - 5 次 Playwright Android 模擬測試：100% 成功，平均 57.2s 收到完整 report
+  - 對家庭網路 / 行動網路 / 各種 router 設定都穩定
+
+### Changed
+
+- `app/api/ai-report/route.ts` — 改用 ReadableStream 包裝 SSE generator
+  - 每 10s 推 `: keep-alive` SSE comment 維持 TCP 連線 active
+  - AI 報告完成後推 `data: {event:"done",report:{...}}` 事件
+  - 錯誤時推 `data: {event:"error",message:"..."}` 事件
+  - 加 `[ai-report-debug]` log 記錄 UA / body 大小 / 總耗時
+- `app/page.tsx` — 改用 fetch + ReadableStream 解析 SSE 串流
+  - 收到 done event 觸發 setState
+  - 收到 error event 顯示錯誤訊息
+  - timeout 從 120s 拉到 180s
+  - 區分 AbortError / TypeError / 其他錯誤
+  - **附加修法**：1Y 線圖預設顯示（line 94 'chart' → 'points'）
+- `lib/sources/index.ts` getNews() — 台股 Finnhub 失敗後 fallback 到 Goodinfo
+  - 對 *.TW/*.TWO：直接走 goodinfo.fetchGoodinfoNews()（免費、6h cache）
+  - 對美股：保留原本同產業 peer fallback
+  - GoodinfoNewsItem → NewsItem 映射（publisher=Goodinfo, sentiment=neutral）
+- `app/page.tsx` — twse phase 與 AI 報告並行觸發（不 sequential 等 financials）
+- `lib/types.ts` DashboardData 加 `competitorsLoading: boolean`
+- `components/dashboard/CompetitorTable.tsx` — 0 個 competitors + loading 顯示「正在補抓同業資料」placeholder
+- `app/print/[symbol]/page.tsx` + `app/api/print-data/[symbol]/route.ts` — `competitorsLoading: false`（TypeScript strict 必要）
+
+### Fixed
+
+- **6446.TW 等非常見產業第一次查詢 competitors 區塊 150s 才出來** → 改為並行觸發，40s 內出
+- **2408.TW 等台股新聞永遠 0 則** → Goodinfo fallback 拿到 10 則（原本就有 fetchGoodinfoNews 函式但從未被呼叫）
+- **1Y 線圖預設不出，要先點其他時區再回 1Y** → 修 page.tsx line 94 欄位名 'chart' → 'points'
+
+### Verified
+
+- 5 次 Playwright Android 模擬：100% 成功，57.2s 平均
+- 5 次直接 curl 10-news + 5-competitors body：100% 成功，41-56s
+- SSE chunk 間隔 10.0s ± 12ms（精準每 10s 推 keep-alive）
+
+### 已知限制
+
+- AI 中轉站對大 body（10+ 新聞 + 5+ competitors）偶發 80s timeout（5 次測試中 0 次失敗，但不排除中轉站本身不穩定）
+- print/print-data 端的 TypeScript strict 需要 `competitorsLoading` 預留欄位
+
+---
+
 ## [0.5.3] - 2026-07-15 — AI 報告觸發時機修正
 
 ### Fixed
