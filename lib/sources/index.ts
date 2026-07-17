@@ -32,6 +32,7 @@ import * as twse from './twse';
 import * as mock from './mock';
 import * as yahooQs from './yahoo-quote-summary';
 import * as secEdgar from './sec-edgar';
+import * as goodinfo from './goodinfo';
 import * as secCik from './sec-cik';
 import * as fred from './fred';
 import * as mopsXbrl from './mops-xbrl';
@@ -720,42 +721,69 @@ export async function getNews(symbol: string): Promise<NewsItem[]> {
   const sym = symbol.toUpperCase();
   // 新聞 TTL 用較短的 15 分鐘（內容時效性高）
   return cached(`news:${sym}`, 15 * 60 * 1000, async () => {
-    // 1. Finnhub（主源）
+    // 1. Finnhub（主源；對台股幾乎無新聞，會落到 fallback）
     if (finnhub.isAvailable()) {
       const result = await withRetry('finnhub.news', () => finnhub.fetchCompanyNews(sym));
       if (result && result.length > 0) return fillNewsImpact(result);
     }
-    console.log('[fallback] finnhub news failed, trying same-sector fallback');
+    console.log('[fallback] finnhub news failed, trying goodinfo (台股) / same-sector (美股)');
 
-    // 2. 同產業新聞 fallback：當主 symbol 沒新聞時，從 competitors.ts 抓同類股 symbol，
-    //    再用 Finnhub 抓它們的新聞。標題加上「（產業延伸）」前綴、category 改為 industry。
-    const peerSymbols = getPeerSymbolsForNews(sym);
-    if (peerSymbols.length > 0 && finnhub.isAvailable()) {
-      const peerNews: NewsItem[] = [];
-      for (const peer of peerSymbols) {
-        try {
-          const result = await withRetry(`finnhub.news.${peer}`, () =>
-            finnhub.fetchCompanyNews(peer),
-          );
-          if (result && result.length > 0) {
-            for (const n of result) {
-              peerNews.push({
-                ...n,
-                title: `【產業延伸・${peer}】${n.title}`,
-                category: 'industry',
-              });
-            }
-          }
-        } catch {
-          // 略過失敗的 peer
+    // 2. 台股 fallback：Goodinfo 個股頁右側「新聞及公告」欄（免費、無 API key 限制）
+    //    對台股來說這是**主源**而非 fallback（Finnhub 對台股付費牆）
+    const isTaiwan = sym.endsWith('.TW') || sym.endsWith('.TWO');
+    if (isTaiwan) {
+      try {
+        const goodinfoNews = await withRetry('goodinfo.news', () => goodinfo.fetchGoodinfoNews(sym, 10));
+        if (goodinfoNews && goodinfoNews.length > 0) {
+          // 映射 GoodinfoNewsItem → NewsItem
+          const mapped: NewsItem[] = goodinfoNews.map((n) => ({
+            title: n.title,
+            publisher: n.source || 'Goodinfo',
+            link: n.link,
+            publishDate: n.publishedAt || '',
+            summary: '', // Goodinfo 沒提供 summary
+            // category: Goodinfo 沒分類，用 'industry' 預設（前台不會特別用）
+            category: 'industry',
+            sentiment: 'neutral',
+            impact: '',
+          }));
+          return fillNewsImpact(mapped);
         }
-        // 拿到 10 則就停
-        if (peerNews.length >= 10) break;
+      } catch (e) {
+        console.warn('[fallback] goodinfo news failed:', e instanceof Error ? e.message : e);
       }
-      if (peerNews.length > 0) return fillNewsImpact(peerNews.slice(0, 10));
     }
 
-    // 3. 全部失敗：空陣列（前端 UI 會顯示「暫無新聞」）
+    // 3. 美股 fallback：同產業 peer 的 Finnhub 新聞
+    if (!isTaiwan && finnhub.isAvailable()) {
+      const peerSymbols = getPeerSymbolsForNews(sym);
+      if (peerSymbols.length > 0) {
+        const peerNews: NewsItem[] = [];
+        for (const peer of peerSymbols) {
+          try {
+            const result = await withRetry(`finnhub.news.${peer}`, () =>
+              finnhub.fetchCompanyNews(peer),
+            );
+            if (result && result.length > 0) {
+              for (const n of result) {
+                peerNews.push({
+                  ...n,
+                  title: `【產業延伸・${peer}】${n.title}`,
+                  category: 'industry',
+                });
+              }
+            }
+          } catch {
+            // 略過失敗的 peer
+          }
+          // 拿到 10 則就停
+          if (peerNews.length >= 10) break;
+        }
+        if (peerNews.length > 0) return fillNewsImpact(peerNews.slice(0, 10));
+      }
+    }
+
+    // 4. 全部失敗：空陣列（前端 UI 會顯示「暫無新聞」）
     return [];
   });
 }

@@ -35,6 +35,8 @@ export async function GET(
       chart,
       news: [],
       competitors: { competitors: [], aiSummary: '' },
+      // print 端不需要顯示 loading placeholder（PDF 是一次性快照）
+      competitorsLoading: false,
       aiReport: null,
       fetchedAt: new Date().toISOString(),
     };

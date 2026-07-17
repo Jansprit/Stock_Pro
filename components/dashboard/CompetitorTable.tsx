@@ -1,4 +1,4 @@
-import { Users, TrendingUp, TrendingDown } from 'lucide-react';
+import { Users, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
@@ -13,9 +13,11 @@ interface CompetitorTableProps {
   error?: string | null;
   /** AI 總結生成中（覆蓋 Skeleton，顯示載入動畫）*/
   aiSummaryLoading?: boolean;
+  /** twse phase 仍在補抓（生技醫療等非常見產業可能要 60-90s）— 顯示「正在補抓同業」placeholder */
+  competitorsLoading?: boolean;
 }
 
-export function CompetitorTable({ data, baseSymbol, loading, error, aiSummaryLoading }: CompetitorTableProps) {
+export function CompetitorTable({ data, baseSymbol, loading, error, aiSummaryLoading, competitorsLoading }: CompetitorTableProps) {
   if (error) {
     return (
       <Card title="競爭對手比較">
@@ -32,7 +34,25 @@ export function CompetitorTable({ data, baseSymbol, loading, error, aiSummaryLoa
     );
   }
 
+  // 0 個 competitors + 仍在補抓：顯示「正在補抓」placeholder（避免 user 誤以為是 bug）
   if (data.competitors.length === 0) {
+    if (competitorsLoading) {
+      return (
+        <Card title="競爭對手比較">
+          <div className="flex h-64 flex-col items-center justify-center gap-3 text-sm text-fg-muted">
+            <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
+            <div className="text-center">
+              <p className="font-medium text-fg">正在補抓同業資料…</p>
+              <p className="mt-1 text-xs text-fg-subtle">
+                首次查詢此產業（{baseSymbol}）需從 Goodinfo 抓取同業清單，通常 60-90 秒。
+                <br />
+                之後會自動快取 24 小時，再次查詢即可秒回。
+              </p>
+            </div>
+          </div>
+        </Card>
+      );
+    }
     return (
       <Card title="競爭對手比較">
         <EmptyState

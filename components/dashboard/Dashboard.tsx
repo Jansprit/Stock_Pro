@@ -147,7 +147,7 @@ export function Dashboard({ data, aiError, isAiLoading = false, onRefresh }: Das
       <NewsList news={news} />
 
       {/* 競爭對手比較 */}
-      <CompetitorTable data={competitors} baseSymbol={overview.symbol} aiSummaryLoading={isAiLoading && !competitors.aiSummary} />
+      <CompetitorTable data={competitors} baseSymbol={overview.symbol} aiSummaryLoading={isAiLoading && !competitors.aiSummary} competitorsLoading={data.competitorsLoading} />
 
       {/* 完整研究報告（摺疊式） */}
       {aiReport ? (

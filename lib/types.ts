@@ -205,6 +205,8 @@ export interface DashboardData {
   chart: PricePoint[];
   news: NewsItem[];
   competitors: CompetitorData;
+  /** competitors 是否仍在補抓（twse phase 進行中）。首查冷啟動可能要 60-90s */
+  competitorsLoading: boolean;
   aiReport: AIReport | null;
   fetchedAt: string;
 }

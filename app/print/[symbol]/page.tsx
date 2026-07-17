@@ -234,6 +234,8 @@ async function fetchAllData(symbol: string): Promise<DashboardData> {
     chart,
     news: [],
     competitors,
+    // print 頁面是靜態快照，不需要 loading 狀態
+    competitorsLoading: false,
     aiReport: null,
     fetchedAt: new Date().toISOString(),
   };
