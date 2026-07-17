@@ -16,6 +16,8 @@ interface FetchState {
   aiError: string | null;
   /** AI 報告正在生成中（首輪已載入、第二輪還沒回來） */
   aiLoading: boolean;
+  /** twse phase competitors 仍在補抓中（生技醫療等非常見產業可能要 60-90s） */
+  competitorsLoading: boolean;
 }
 
 export default function HomePage() {
@@ -25,6 +27,7 @@ export default function HomePage() {
     data: null,
     aiError: null,
     aiLoading: false,
+    competitorsLoading: false,
   });
 
   const loadStock = useCallback(async (symbol: string, isRefresh = false) => {
@@ -40,6 +43,7 @@ export default function HomePage() {
       data: null,
       aiError: isRefresh ? s.aiError : null,
       aiLoading: isRefresh ? s.aiLoading : false,
+      competitorsLoading: isRefresh ? s.competitorsLoading : true,
     }));
 
     try {
@@ -73,6 +77,7 @@ export default function HomePage() {
           data: null,
           aiError: null,
           aiLoading: false,
+          competitorsLoading: false,
         });
         return;
       }
@@ -91,7 +96,7 @@ export default function HomePage() {
       ]);
 
       const chartPoints = chartRes.status === 'fulfilled' && !chartRes.value?.error
-        ? chartRes.value.chart ?? chartRes.value
+        ? chartRes.value.points ?? chartRes.value
         : null;
       const news = newsRes.status === 'fulfilled' && !newsRes.value?.error
         ? (newsRes.value.news ?? [])
@@ -108,112 +113,212 @@ export default function HomePage() {
         error: null,
         aiError: null,
         aiLoading: true, // 標記 AI 報告開始生成
+        // 同時標記 twse phase 仍在補抓中（讓 CompetitorTable 顯示 loading placeholder）
+        competitorsLoading: true,
         data: {
           overview,
           financials: { symbol, currency: overview.currency, years: [] }, // 先用空財報
           chart: chartPoints,
           news,
           competitors,
+          // DashboardData 內的 competitorsLoading 給 print 端使用（PDF 端不會看到）
+          competitorsLoading: true,
           aiReport: null,
           fetchedAt: new Date().toISOString(),
         },
       });
 
+      // 立即觸發 AI 報告 + twse phase competitors 補抓（v0.5.4 兩者並行，不再 sequential 等）
+      // 之前時序：先等 AI 報告完成 → 再等 financials → 才觸發 twse phase → user 要等 150s+ 才看到 competitors
+      // 現在時序：AI 報告（~60s） 與 twse phase（~30s cold start）並行，user t=60s 兩者都收齊
+      const twsePromise = (async () => {
+        try {
+          const twseRes = await fetchWithTimeout(`/api/competitors/${encodeURIComponent(symbol)}?phase=twse`, SLOW_TIMEOUT);
+          if (twseRes && !twseRes.error && Array.isArray(twseRes.competitors) && twseRes.competitors.length > 0) {
+            setState((s) => s.data
+              ? { ...s, data: { ...s.data, competitors: twseRes, competitorsLoading: false } }
+              : s);
+            console.log(`[page] twse phase 完成: ${twseRes.competitors.length} competitors`);
+          } else {
+            setState((s) => s.data ? { ...s, data: { ...s.data, competitorsLoading: false } } : s);
+          }
+        } catch (e) {
+          console.warn('[page] twse competitors 超時或失敗:', e instanceof Error ? e.message : e);
+          setState((s) => s.data ? { ...s, data: { ...s.data, competitorsLoading: false } } : s);
+        }
+      })();
+
       // 立即觸發 AI 報告（v0.5.3 修正：不要等 financials 與 twse 補丁，60s timeout 內就觸發）
+      // v0.5.4 SSE 修法：server 改成 SSE 串流，每 10s 推 keep-alive chunk
+      //   避免 Wi-Fi 6 router idle TCP timeout 切斷（60-90s 無 activity）
       // body 用第一階段的 competitors（5 美股）即可 — AI 報告需要的是「同產業對手」概念
       // 而非精確個股對標
       try {
-        const aiRes = await fetch('/api/ai-report', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            overview: {
-              symbol: overview.symbol,
-              name: overview.name,
-              exchange: overview.exchange,
-              sector: overview.sector,
-              industry: overview.industry,
-              // === 從 Goodinfo 拿到的台股補充欄位（v0.3.x 新增）===
-              twseIndustry: overview.twseIndustry,
-              chairman: overview.chairman,
-              president: overview.president,
-              mainProducts: overview.mainProducts,
-              address: overview.address,
-              ipoDate: overview.ipoDate,
-              website: overview.website,
-              description: overview.description,
-              marketCap: overview.marketCap,
-              price: overview.price,
-              eps: overview.eps,
-              pe: overview.trailingPE,
-              currency: overview.currency,
-            },
-            financials: {
-              years: financials.years.map((y: FinancialYear) => ({
-                year: y.year,
-                revenue: y.revenue,
-                grossProfit: y.grossProfit,
-                netIncome: y.netIncome,
-                eps: y.eps,
-                freeCashFlow: y.freeCashFlow,
-                totalLiabilities: y.totalLiabilities,
-                totalEquity: y.totalEquity,
-                grossMargin: y.grossMargin,
-                netMargin: y.netMargin,
-                // roe / debtToEquity 可能是 null（負股東權益），AI prompt 已處理
-                roe: y.roe ?? 0,
-                debtToEquity: y.debtToEquity ?? 0,
+        // v0.5.4 fix：ai-report fetch 必須明確設 timeout。
+        // SSE 串流 56-104s 完成（原來一次性 fetch 也一樣），但每 10s 有 keep-alive chunk
+        // 不會被 router 切斷，所以這次 120s 應該足夠覆蓋絕大多數場景。
+        const AI_TIMEOUT_MS = 180_000; // 拉到 180s 給 SSE 更寬鬆
+        const aiAbort = new AbortController();
+        const aiTimeoutId = setTimeout(() => aiAbort.abort(), AI_TIMEOUT_MS);
+        let aiRes: Response;
+        try {
+          aiRes = await fetch('/api/ai-report', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              overview: {
+                symbol: overview.symbol,
+                name: overview.name,
+                exchange: overview.exchange,
+                sector: overview.sector,
+                industry: overview.industry,
+                // === 從 Goodinfo 拿到的台股補充欄位（v0.3.x 新增）===
+                twseIndustry: overview.twseIndustry,
+                chairman: overview.chairman,
+                president: overview.president,
+                mainProducts: overview.mainProducts,
+                address: overview.address,
+                ipoDate: overview.ipoDate,
+                website: overview.website,
+                description: overview.description,
+                marketCap: overview.marketCap,
+                price: overview.price,
+                eps: overview.eps,
+                pe: overview.trailingPE,
+                currency: overview.currency,
+              },
+              financials: {
+                years: financials.years.map((y: FinancialYear) => ({
+                  year: y.year,
+                  revenue: y.revenue,
+                  grossProfit: y.grossProfit,
+                  netIncome: y.netIncome,
+                  eps: y.eps,
+                  freeCashFlow: y.freeCashFlow,
+                  totalLiabilities: y.totalLiabilities,
+                  totalEquity: y.totalEquity,
+                  grossMargin: y.grossMargin,
+                  netMargin: y.netMargin,
+                  // roe / debtToEquity 可能是 null（負股東權益），AI prompt 已處理
+                  roe: y.roe ?? 0,
+                  debtToEquity: y.debtToEquity ?? 0,
+                })),
+              },
+              news: news.slice(0, 10).map((n: { title: string; summary: string; sentiment: string; category: string }) => ({
+                title: n.title,
+                summary: n.summary,
+                sentiment: n.sentiment,
+                category: n.category,
               })),
-            },
-            news: news.slice(0, 10).map((n: { title: string; summary: string; sentiment: string; category: string }) => ({
-              title: n.title,
-              summary: n.summary,
-              sentiment: n.sentiment,
-              category: n.category,
-            })),
-            competitors: competitors.competitors.map((c: { name: string; marketPosition: string; coreStrength: string; coreRisk: string }) => ({
-              name: c.name,
-              marketPosition: c.marketPosition,
-              coreStrength: c.coreStrength,
-              coreRisk: c.coreRisk,
-            })),
-          }),
-        });
+              competitors: competitors.competitors.map((c: { name: string; marketPosition: string; coreStrength: string; coreRisk: string }) => ({
+                name: c.name,
+                marketPosition: c.marketPosition,
+                coreStrength: c.coreStrength,
+                coreRisk: c.coreRisk,
+              })),
+            }),
+            signal: aiAbort.signal,
+          });
+        } finally {
+          clearTimeout(aiTimeoutId);
+        }
 
-        const aiData = await aiRes.json();
+        if (!aiRes.ok && aiRes.status !== 200) {
+          // 非 200：可能是 503 CLAUDE_UNAVAILABLE 等。讀 body JSON 取錯誤訊息
+          let errMsg = `HTTP ${aiRes.status}`;
+          try {
+            const errJson = await aiRes.json();
+            if (errJson.message) errMsg = errJson.message;
+          } catch { /* ignore */ }
+          setState((s) => ({ ...s, aiError: errMsg, aiLoading: false }));
+          return;
+        }
 
-        if (aiData.error) {
-          setState((s) => ({ ...s, aiError: aiData.message, aiLoading: false }));
-        } else if (aiData.report) {
-          // 把 AI 報告的 competitiveAnalysis 整合到 competitors.aiSummary
-          setState((s) => ({
-            ...s,
-            aiError: null,
-            aiLoading: false,
-            data: s.data
-              ? {
-                  ...s.data,
-                  aiReport: aiData.report,
-                  competitors: {
-                    ...s.data.competitors,
-                    aiSummary: aiData.report.competitiveAnalysis,
-                  },
-                  fetchedAt: new Date().toISOString(),
-                }
-              : null,
-          }));
-        } else {
-          // 既沒 error 也沒 report — API 回怪 response。明確 setState 結束 loading 狀態，
-          // 否則 Dashboard 的 conditional render 會走 null 分支，整個 AI 區塊消失
-          console.warn('[ai-report] unexpected response:', aiData);
-          setState((s) => ({
-            ...s,
-            aiError: 'AI 報告回應格式異常，請稍後重試',
-            aiLoading: false,
-          }));
+        if (!aiRes.body) {
+          setState((s) => ({ ...s, aiError: 'AI 報告回應為空（無 body）', aiLoading: false }));
+          return;
+        }
+
+        // 讀 SSE 串流：每行解析，遇到 `data: {...}` 事件就處理
+        const reader = aiRes.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let gotFinal = false;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+
+          // SSE 事件以 \n\n 分隔。處理每個完整事件。
+          let idx;
+          while ((idx = buffer.indexOf('\n\n')) >= 0) {
+            const rawEvent = buffer.slice(0, idx);
+            buffer = buffer.slice(idx + 2);
+
+            // 跳過 SSE 註解行（: 開頭）
+            if (rawEvent.startsWith(':')) continue;
+
+            // 找 data: 行
+            const dataLine = rawEvent.split('\n').find(l => l.startsWith('data: '));
+            if (!dataLine) continue;
+
+            const dataStr = dataLine.slice(6); // 去掉 'data: '
+            let evt: { event: string; report?: unknown; message?: string; elapsedMs?: number };
+            try {
+              evt = JSON.parse(dataStr);
+            } catch (e) {
+              console.warn('[ai-report SSE] failed to parse event:', dataStr.slice(0, 100), e);
+              continue;
+            }
+
+            if (evt.event === 'progress') {
+              // 進度事件：可在 UI 顯示，但 v0.5.4 簡化不顯示
+              console.log(`[ai-report SSE] progress: ${evt.message} (${evt.elapsedMs}ms)`);
+            } else if (evt.event === 'done' && evt.report) {
+              gotFinal = true;
+              setState((s) => ({
+                ...s,
+                aiError: null,
+                aiLoading: false,
+                data: s.data
+                  ? {
+                      ...s.data,
+                      aiReport: evt.report as never,
+                      competitors: {
+                        ...s.data.competitors,
+                        // SSE 內 report.competitiveAnalysis 結構
+                        aiSummary: (evt.report as { competitiveAnalysis?: string }).competitiveAnalysis ?? s.data.competitors.aiSummary,
+                      },
+                      fetchedAt: new Date().toISOString(),
+                    }
+                  : null,
+              }));
+            } else if (evt.event === 'error') {
+              gotFinal = true;
+              setState((s) => ({ ...s, aiError: evt.message ?? 'AI 報告錯誤', aiLoading: false }));
+            }
+          }
+        }
+
+        if (!gotFinal) {
+          // 串流在沒收到 done/error 就結束（可能是網路切斷）
+          setState((s) => ({ ...s, aiError: 'AI 報告連線中斷，請重新搜尋', aiLoading: false }));
         }
       } catch (err) {
-        const msg = err instanceof Error ? err.message : 'AI 分析失敗';
+        // v0.5.4 SSE 修法 — 錯誤分流翻譯
+        const errMsg = err instanceof Error ? err.message : String(err);
+        const errName = err instanceof Error ? err.name : '';
+        let msg: string;
+        if (errName === 'AbortError') {
+          msg = 'AI 報告生成時間超過 180 秒，請稍候再試一次';
+        } else if (/Failed to fetch|NetworkError|fetch failed/i.test(errMsg)) {
+          msg = '手機網路連線中斷。AI 報告可能已在背景完成，請重新搜尋一次以取得結果。';
+        } else {
+          msg = `AI 分析失敗：${errMsg}`;
+        }
+        console.warn('[ai-report] error caught:', { name: errName, message: errMsg });
         setState((s) => ({ ...s, aiError: msg, aiLoading: false }));
       }
 
@@ -229,15 +334,9 @@ export default function HomePage() {
       // 把 financials 補上（不重新 setState 整個 data，避免 re-render 其他區塊）
       setState((s) => s.data ? { ...s, data: { ...s.data, financials } } : s);
 
-      // 第二階段：抓 Goodinfo 補台股同業（≤30s）。失敗 / 超時不影響主流程，UI 仍可看美股 5 家
-      try {
-        const twseRes = await fetchWithTimeout(`/api/competitors/${encodeURIComponent(symbol)}?phase=twse`, SLOW_TIMEOUT);
-        if (twseRes && !twseRes.error && Array.isArray(twseRes.competitors) && twseRes.competitors.length > 0) {
-          setState((s) => s.data ? { ...s, data: { ...s.data, competitors: twseRes } } : s);
-        }
-      } catch (e) {
-        console.warn('[page] twse competitors 超時或失敗，UI 維持美股同業:', e instanceof Error ? e.message : e);
-      }
+      // twse phase 已與 AI 報告並行觸發（在 try 開頭），這裡不用再等
+      // 確保不會留下 dangling promise 警告
+      await twsePromise.catch(() => {});
     } catch (err) {
       const msg = err instanceof Error ? err.message : '載入發生錯誤';
       setState({
@@ -246,6 +345,7 @@ export default function HomePage() {
         data: null,
         aiError: null,
         aiLoading: false,
+        competitorsLoading: false,
       });
     }
   }, []);
